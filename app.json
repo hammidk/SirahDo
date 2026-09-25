@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "SirahDo",
+    "slug": "SirahDo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.sirahdo.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B6E4F",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.sirahdo.app",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "scheme": "sirahdo",
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#191919"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "SirahDo использует ваше местоположение, чтобы рассчитать время намазов."
+        }
+      ]
+    ],
+    "owner": "sirahdo",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c11c7017-2b5b-456f-b296-48fe1b753d55"
+      }
+    },
+    "backgroundColor": "#191919"
+  }
+}
