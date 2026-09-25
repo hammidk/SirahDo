@@ -1,4 +1,4 @@
-// Чек-лист внутри задачи: подзадачи-галочки (ТЗ §5.3).
+// Чек-лист внутри задачи: подзадачи-галочки (docs/spec/tasks.md).
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';

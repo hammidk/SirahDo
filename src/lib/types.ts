@@ -1,4 +1,4 @@
-// Общие типы данных приложения — модель данных из docs/TZ.md (§12) как код.
+// Общие типы данных приложения — модель данных; описание — docs/ARCHITECTURE.md.
 // Версия схемы хранилища: см. SCHEMA_VERSION и миграции в storage.ts.
 
 import { CATEGORY_COLORS, palette } from '../theme/colors';
@@ -22,7 +22,7 @@ export const SPHERES: { id: SphereId; title: string }[] = [
   { id: 'other', title: 'Цели / Идеи / Прочее' },
 ];
 
-// Теги по намерению — фиксированный список (ТЗ §2). Не путать со свободными
+// Теги по намерению — фиксированный список (docs/SPEC.md). Не путать со свободными
 // пользовательскими тегами (Tag) и с полем «Намерение» проекта/раздела.
 export type IntentionTagId = 'ibada' | 'dunya' | 'obligation';
 
@@ -46,7 +46,7 @@ export const PRIORITIES: { id: Priority; title: string; color: string }[] = [
 
 // ---------- Намаз ----------
 
-// Окно намаза: промежуток между двумя соседними намазами (ТЗ §3).
+// Окно намаза: промежуток между двумя соседними намазами (docs/spec/prayer-profile.md).
 export type NamazWindowName =
   | 'fajr_dhuhr'
   | 'dhuhr_asr'
@@ -110,7 +110,7 @@ export interface PrayerTimesForDay {
 
 export type RecurrenceFreq = 'day' | 'week' | 'month' | 'year';
 
-// Правило повторения (ТЗ §7) — общее для события и задачи.
+// Правило повторения (docs/SPEC.md, «Повторение») — общее для события и задачи.
 export interface Recurrence {
   freq: RecurrenceFreq;
   interval: number; // каждые N единиц freq, >= 1
@@ -119,7 +119,7 @@ export interface Recurrence {
   count?: number; // сколько всего повторов (включая первое)
 }
 
-// Напоминание (ТЗ §8): за N минут до начала/срока или в конкретный момент.
+// Напоминание (docs/SPEC.md, «Напоминания»): за N минут до начала/срока или в конкретный момент.
 export type Reminder =
   | { kind: 'offset'; minutes: number } // 0 = в момент срока
   | { kind: 'at'; at: string }; // ISO

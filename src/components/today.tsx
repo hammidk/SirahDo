@@ -1,4 +1,4 @@
-// Блоки экрана «Сегодня» (ТЗ §9): текущее окно с таймером, «Фокус дня»,
+// Блоки экрана «Сегодня» (docs/spec/today.md): текущее окно с таймером, «Фокус дня»,
 // секции окон намаза с задачами и событиями, привычки на сегодня, вечерний итог.
 
 import type { ReactNode } from 'react';
@@ -80,7 +80,7 @@ export function FocusCard({ items }: { items: FocusItem[] }) {
           </View>
         </View>
       ))}
-      {/* Заглушка ИИ-слоя (ТЗ §11): без логики, только место под будущие рекомендации. */}
+      {/* Заглушка ИИ-слоя (docs/SPEC.md, «ИИ»): без логики, только место под будущие рекомендации. */}
       <View style={styles.aiStub} accessibilityState={{ disabled: true }}>
         <Icon name="sparkles" size={16} color={COLORS.ai} />
         <Text style={styles.aiStubText}>Рекомендации ИИ — дуа, азкары, пересборка дня</Text>
