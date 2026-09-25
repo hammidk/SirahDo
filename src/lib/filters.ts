@@ -1,46 +1,33 @@
-// Сохранённые фильтры (docs/spec/overview.md): простые критерии из чипов, без языка запросов.
-// Внутри одного критерия — «ИЛИ» (любая из выбранных сфер), между критериями — «И».
+// Фильтры (docs/spec/overview.md): фиксированный список из 4 по сроку, новые не создаются.
+// Допущение: задание не называет, какие именно 4 фильтра, — берём 4 критерия срока,
+// которые уже были в приложении (Сегодня / 7 дней / Просрочено / Без срока).
 
 import dayjs from 'dayjs';
 
-import type { DueFilter, FilterCriteria, Task } from './types';
+import type { DueFilter, Task } from './types';
 import { DATE_FORMAT } from './dates';
 
-export const DUE_FILTERS: { id: DueFilter; title: string }[] = [
-  { id: 'today', title: 'Сегодня' },
-  { id: 'week', title: 'Ближайшие 7 дней' },
-  { id: 'overdue', title: 'Просрочено' },
-  { id: 'none', title: 'Без срока' },
+export const FIXED_FILTERS: { id: DueFilter; title: string; hint: string }[] = [
+  { id: 'today', title: 'Сегодня', hint: 'Задачи со сроком на сегодня' },
+  { id: 'week', title: 'Ближайшие 7 дней', hint: 'Срок — сегодня и следующие 6 дней' },
+  { id: 'overdue', title: 'Просрочено', hint: 'Срок уже прошёл' },
+  { id: 'none', title: 'Без срока', hint: 'Задачи без даты' },
 ];
 
-export function matchesCriteria(task: Task, c: FilterCriteria, today = dayjs().format(DATE_FORMAT)): boolean {
+/** Подходит ли активная задача под фильтр по сроку. */
+export function matchesFilter(task: Task, filter: DueFilter, today = dayjs().format(DATE_FORMAT)): boolean {
   if (task.status !== 'active') return false;
-  if (c.spheres?.length && (!task.sphere || !c.spheres.includes(task.sphere))) return false;
-  if (c.intentionTags?.length && (!task.intentionTag || !c.intentionTags.includes(task.intentionTag))) return false;
-  if (c.priorities?.length && !c.priorities.includes(task.priority)) return false;
-  if (c.tagIds?.length && !task.tagIds.some((id) => c.tagIds!.includes(id))) return false;
-  if (c.due) {
-    const d = task.due?.date;
-    switch (c.due) {
-      case 'today':
-        if (d !== today) return false;
-        break;
-      case 'week': {
-        const end = dayjs(today).add(6, 'day').format(DATE_FORMAT);
-        if (!d || d < today || d > end) return false;
-        break;
-      }
-      case 'overdue':
-        if (!d || d >= today) return false;
-        break;
-      case 'none':
-        if (d) return false;
-        break;
+  const d = task.due?.date;
+  switch (filter) {
+    case 'today':
+      return d === today;
+    case 'week': {
+      const end = dayjs(today).add(6, 'day').format(DATE_FORMAT);
+      return !!d && d >= today && d <= end;
     }
+    case 'overdue':
+      return !!d && d < today;
+    case 'none':
+      return !d;
   }
-  return true;
-}
-
-export function isEmptyCriteria(c: FilterCriteria): boolean {
-  return !c.spheres?.length && !c.intentionTags?.length && !c.priorities?.length && !c.tagIds?.length && !c.due;
 }

@@ -12,6 +12,7 @@ import { formatHijri, toHijri } from '../../lib/hijri';
 import { todayKey, toDateKey } from '../../lib/dates';
 import { useTaskSheet } from '../../components/TaskSheet';
 import { COLORS } from '../../components/ui';
+import { HabitIcon } from '../../components/HabitIcon';
 import { tagBackground } from '../../theme/colors';
 
 function Section({ title, children, empty }: { title: string; children: React.ReactNode; empty?: boolean }) {
@@ -85,7 +86,7 @@ export default function HistoryDayScreen() {
         <View style={styles.habits}>
           {d.habits.map(({ habit, count, done }) => (
             <View key={habit.id} style={[styles.habit, done && styles.habitDone]}>
-              <Text>{habit.icon}</Text>
+              <HabitIcon id={habit.icon} size={14} color={done ? COLORS.success : habit.color} />
               <Text style={styles.habitName} numberOfLines={1}>
                 {habit.name}
               </Text>

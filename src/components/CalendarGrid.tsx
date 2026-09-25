@@ -1,5 +1,6 @@
 // Сетка месяца (Пн–Вс) с выбором дня. Переиспользуется пикерами даты,
-// окончанием повторения и (далее) экраном Календаря.
+// окончанием повторения и пикером даты Календаря. Месяцы листаются стрелками
+// и горизонтальным свайпом по сетке.
 
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -8,6 +9,8 @@ import dayjs, { Dayjs } from 'dayjs';
 
 import { DATE_FORMAT, WEEKDAY_SHORT, isoWeekday } from '../lib/dates';
 import { COLORS } from './ui';
+import { Icon } from './Icon';
+import { SwipePager } from './SwipePager';
 
 function buildMonthGrid(month: Dayjs): (Dayjs | null)[] {
   const start = month.startOf('month');
@@ -36,17 +39,21 @@ export function CalendarGrid({ value, onChange, minDate }: Props) {
         <Pressable
           onPress={() => setVisibleMonth((m) => m.subtract(1, 'month'))}
           hitSlop={10}
+          style={styles.monthNav}
+          accessibilityRole="button"
           accessibilityLabel="Предыдущий месяц"
         >
-          <Text style={styles.monthNav}>‹</Text>
+          <Icon name="chevron-back" size={20} color={COLORS.muted} />
         </Pressable>
         <Text style={styles.monthLabel}>{visibleMonth.format('MMMM YYYY')}</Text>
         <Pressable
           onPress={() => setVisibleMonth((m) => m.add(1, 'month'))}
           hitSlop={10}
+          style={styles.monthNav}
+          accessibilityRole="button"
           accessibilityLabel="Следующий месяц"
         >
-          <Text style={styles.monthNav}>›</Text>
+          <Icon name="chevron-forward" size={20} color={COLORS.muted} />
         </Pressable>
       </View>
 
@@ -58,38 +65,44 @@ export function CalendarGrid({ value, onChange, minDate }: Props) {
         ))}
       </View>
 
-      <View style={styles.grid}>
-        {grid.map((d, i) => {
-          if (!d) return <View key={i} style={styles.dayCell} />;
-          const key = d.format(DATE_FORMAT);
-          const isSelected = key === value;
-          const isToday = key === todayStr;
-          const disabled = !!minDate && key < minDate;
-          return (
-            <Pressable
-              key={i}
-              style={styles.dayCell}
-              disabled={disabled}
-              onPress={() => onChange(key)}
-              accessibilityLabel={d.format('D MMMM YYYY')}
-              accessibilityState={{ selected: isSelected, disabled }}
-            >
-              <View style={[styles.dayCircle, isSelected && styles.dayCircleSelected]}>
-                <Text
-                  style={[
-                    styles.dayText,
-                    isToday && !isSelected && styles.dayTextToday,
-                    isSelected && styles.dayTextSelected,
-                    disabled && styles.dayTextDisabled,
-                  ]}
-                >
-                  {d.date()}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
+      <SwipePager
+        onPrev={() => setVisibleMonth((m) => m.subtract(1, 'month'))}
+        onNext={() => setVisibleMonth((m) => m.add(1, 'month'))}
+      >
+        <View style={styles.grid}>
+          {grid.map((d, i) => {
+            if (!d) return <View key={i} style={styles.dayCell} />;
+            const key = d.format(DATE_FORMAT);
+            const isSelected = key === value;
+            const isToday = key === todayStr;
+            const disabled = !!minDate && key < minDate;
+            return (
+              <Pressable
+                key={i}
+                style={styles.dayCell}
+                disabled={disabled}
+                onPress={() => onChange(key)}
+                accessibilityRole="button"
+                accessibilityLabel={d.format('D MMMM YYYY')}
+                accessibilityState={{ selected: isSelected, disabled }}
+              >
+                <View style={[styles.dayCircle, isSelected && styles.dayCircleSelected]}>
+                  <Text
+                    style={[
+                      styles.dayText,
+                      isToday && !isSelected && styles.dayTextToday,
+                      isSelected && styles.dayTextSelected,
+                      disabled && styles.dayTextDisabled,
+                    ]}
+                  >
+                    {d.date()}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+      </SwipePager>
     </View>
   );
 }
@@ -102,7 +115,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   monthLabel: { fontSize: 15, fontWeight: '600', color: COLORS.text, textTransform: 'capitalize' },
-  monthNav: { fontSize: 24, color: COLORS.primary, paddingHorizontal: 12 },
+  monthNav: { paddingHorizontal: 8, paddingVertical: 4 },
   weekdayRow: { flexDirection: 'row', marginBottom: 4 },
   weekdayLabel: { flex: 1, textAlign: 'center', fontSize: 11, color: COLORS.muted },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },

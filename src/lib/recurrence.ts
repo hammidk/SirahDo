@@ -5,7 +5,7 @@
 import dayjs, { Dayjs } from 'dayjs';
 
 import type { Recurrence, RecurrenceFreq } from './types';
-import { DATE_FORMAT, WEEKDAY_SHORT, isoWeekday, startOfIsoWeek } from './dates';
+import { DATE_FORMAT, WEEKDAY_SHORT, isoWeekday, plural, startOfIsoWeek } from './dates';
 
 export type RecurrencePresetId = 'none' | 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'yearly';
 
@@ -70,15 +70,6 @@ const UNIT_FORMS: Record<RecurrenceFreq, [string, string, string]> = {
   month: ['месяц', 'месяца', 'месяцев'],
   year: ['год', 'года', 'лет'],
 };
-
-/** Русское склонение по числу: 1 день, 2 дня, 5 дней. */
-export function plural(n: number, forms: [string, string, string]): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return forms[0];
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
-  return forms[2];
-}
 
 export function freqUnitLabel(freq: RecurrenceFreq, n: number): string {
   return plural(n, UNIT_FORMS[freq]);

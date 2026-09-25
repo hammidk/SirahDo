@@ -27,7 +27,7 @@
 | `react-native-reanimated` 4.5.1 + `react-native-worklets` 0.10.1 | Не используются напрямую (транзитивно нужны expo-router); **закреплены версиями SDK 57**, иначе npm тянет несовместимые и `npm ci` на EAS падает |
 | `expo-font`, `expo-linking`, `expo-constants`, `expo-status-bar`, `react-native-screens`, `react-native-safe-area-context`, `react-native-web`/`react-dom` | Стандартная обвязка Expo / веб-сборка |
 
-Собственные компоненты вместо библиотек: пикеры даты/времени, сетки календаря, markdown-редактор (без WebView), нижние листы.
+Собственные компоненты вместо библиотек: пикеры даты/времени, сетки календаря, markdown-редактор (без WebView), нижние листы, свайп-листание периодов и сворачиваемые секции (встроенные `PanResponder` + `Animated`).
 Правило: новые нативные зависимости — только из состава Expo Go, иначе нужен dev build (предупреждать пользователя).
 
 ## Качество
@@ -36,7 +36,7 @@
 - Линтер: `npx expo lint` (ESLint 9, `eslint-config-expo`, flat config `eslint.config.js`). В правилах есть проверки React Compiler/хуков: ручные `useMemo`, которые компилятор не может сохранить, убирать; `setState` в эффектах и доступ к `ref` при рендере запрещены.
 - Сборка: `npx expo export -p web` — быстрая проверка, что всё бандлится.
 - Совместимость зависимостей: `npx expo-doctor`, исправление — `npx expo install --fix`.
-- Автотестов (Jest и т.п.) **нет**. Чистая логика (`recurrence`, `dates`, `habits`, `filters`, `projects`, `dayPlan`, `dayFocus`, `markdown`, `timeline`) проверялась разовыми node-скриптами; UI — в веб-сборке во встроенном браузере.
+- Автотестов (Jest и т.п.) **нет**. Чистая логика (`recurrence`, `dates`, `habits`, `filters`, `projects`, `prayerTimes`, `markdown`, `timeline`) проверялась разовыми node-скриптами; UI — в веб-сборке во встроенном браузере.
 - Форматтер (Prettier) не подключён.
 
 ## Сборка и поставка

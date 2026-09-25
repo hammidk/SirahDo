@@ -4,15 +4,15 @@
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Text, TextInput } from './themed';
+import { Switch, Text, TextInput } from './themed';
 import dayjs from 'dayjs';
 
 import type { HabitReminder, Reminder } from '../lib/types';
-import { DATE_FORMAT } from '../lib/dates';
-import { plural } from '../lib/recurrence';
+import { DATE_FORMAT, plural } from '../lib/dates';
 import { CalendarGrid } from './CalendarGrid';
 import { TimeField } from './TimeField';
-import { Button, COLORS, Chip, ChipsRow, FieldLabel, Sheet } from './ui';
+import { Button, COLORS, Chip, ChipsRow, FieldLabel, FormSection, Sheet } from './ui';
+import { tagBackground } from '../theme/colors';
 import { Icon } from './Icon';
 
 const QUICK_OFFSETS = [0, 5, 10, 30, 60, 24 * 60];
@@ -175,53 +175,83 @@ export function RemindersField({ value, onChange, hasAnchor, anchor = 'срок�
 
 // ---------- Привычки ----------
 
+/**
+ * Напоминания привычки: переключатель + крупные «пилюли» времени. Тап по времени —
+ * изменить, «+ Ещё время» — добавить. Выключение убирает напоминания (список
+ * запоминается до закрытия формы, чтобы включение вернуло его).
+ */
 export function HabitRemindersField({
   value,
   onChange,
+  accent,
 }: {
   value: HabitReminder[];
   onChange: (reminders: HabitReminder[]) => void;
+  accent: string; // цвет привычки
 }) {
-  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<number | 'new' | null>(null);
   const [time, setTime] = useState('08:00');
+  const [stash, setStash] = useState<HabitReminder[]>([]);
+  const on = value.length > 0;
+
+  const toggle = (next: boolean) => {
+    if (next) onChange(stash.length ? stash : [{ time: '08:00' }]);
+    else {
+      setStash(value);
+      onChange([]);
+    }
+  };
+
+  const openEditor = (target: number | 'new') => {
+    setTime(target === 'new' ? '20:00' : value[target].time);
+    setEditing(target);
+  };
+
+  const save = () => {
+    const rest = editing === 'new' || editing === null ? value : value.filter((_, i) => i !== editing);
+    if (!rest.some((r) => r.time === time)) onChange([...rest, { time }].sort((a, b) => a.time.localeCompare(b.time)));
+    else onChange(rest);
+    setEditing(null);
+  };
 
   return (
-    <View>
-      <View style={styles.list}>
-        {value.map((r, i) => (
-          <View key={`${r.time}_${i}`} style={styles.pill}>
-            <Icon name="bell" size={13} color={COLORS.muted} />
-            <Text style={styles.pillText}>{r.time}</Text>
-            <Pressable
-              onPress={() => onChange(value.filter((_, j) => j !== i))}
-              hitSlop={10}
-              accessibilityLabel="Удалить напоминание"
-            >
-              <Text style={styles.pillRemove}>✕</Text>
-            </Pressable>
-          </View>
-        ))}
-        <Pressable style={styles.addPill} onPress={() => setOpen(true)} accessibilityRole="button">
-          <Text style={styles.addPillText}>+ Напоминание</Text>
-        </Pressable>
-      </View>
+    <FormSection
+      title="Напоминания"
+      hint={on ? 'В дни привычки, в выбранное время' : 'Выключены'}
+      right={<Switch value={on} onValueChange={toggle} accessibilityLabel="Напоминать" />}
+    >
+      {on ? (
+        <View style={styles.habitTimes}>
+          {value.map((r, i) => (
+            <View key={`${r.time}_${i}`} style={[styles.habitTime, { backgroundColor: tagBackground(accent) }]}>
+              <Pressable onPress={() => openEditor(i)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`Напоминание в ${r.time}, изменить`}>
+                <Text style={[styles.habitTimeText, { color: accent }]}>{r.time}</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => onChange(value.filter((_, j) => j !== i))}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={`Удалить напоминание ${r.time}`}
+              >
+                <Icon name="close" size={14} color={accent} />
+              </Pressable>
+            </View>
+          ))}
+          <Pressable style={styles.habitAddTime} onPress={() => openEditor('new')} accessibilityRole="button">
+            <Icon name="add" size={16} color={COLORS.muted} />
+            <Text style={styles.addPillText}>Ещё время</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <Sheet
-        visible={open}
-        onClose={() => setOpen(false)}
-        title="Время напоминания"
+        visible={editing !== null}
+        onClose={() => setEditing(null)}
+        title={editing === 'new' ? 'Новое время' : 'Время напоминания'}
         footer={
           <>
-            <Button title="Отмена" kind="secondary" onPress={() => setOpen(false)} />
-            <Button
-              title="Добавить"
-              onPress={() => {
-                if (!value.some((r) => r.time === time)) {
-                  onChange([...value, { time }].sort((a, b) => a.time.localeCompare(b.time)));
-                }
-                setOpen(false);
-              }}
-            />
+            <Button title="Отмена" kind="secondary" onPress={() => setEditing(null)} />
+            <Button title="Готово" onPress={save} />
           </>
         }
       >
@@ -230,7 +260,7 @@ export function HabitRemindersField({
           <TimeField value={time} onChange={setTime} />
         </View>
       </Sheet>
-    </View>
+    </FormSection>
   );
 }
 
@@ -256,6 +286,19 @@ const styles = StyleSheet.create({
     borderColor: COLORS.separator,
   },
   addPillText: { fontSize: 13, color: COLORS.muted },
+  habitTimes: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  habitTime: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 8, paddingVertical: 9, paddingHorizontal: 12 },
+  habitTimeText: { fontSize: 18, fontWeight: '600' },
+  habitAddTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: COLORS.separator,
+  },
   hint: { fontSize: 12, color: COLORS.muted, marginTop: 6 },
   block: { marginTop: 12 },
   optionRow: {

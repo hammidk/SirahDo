@@ -1,6 +1,6 @@
-// Расчёт времён намаза и построение 5 окон дня.
+// Расчёт времён намаза, 5 окон дня и состояния «до следующего намаза».
 // Библиотека `adhan` считает локально по координатам — работает офлайн,
-// без обращения к внешнему API. См. "ТЗ - Исламское дополнение", п.1.
+// без обращения к внешнему API (docs/spec/prayer-profile.md).
 
 import {
   Coordinates,
@@ -14,10 +14,11 @@ import type {
   MadhabId,
   NamazWindow,
   NamazWindowName,
+  PrayerName,
   PrayerTimesForDay,
   UserSettings,
 } from './types';
-import { NAMAZ_WINDOW_TITLES } from './types';
+import { NAMAZ_WINDOW_TITLES, PRAYER_ORDER } from './types';
 
 function resolveCalculationMethod(id: CalculationMethodId) {
   const map: Record<CalculationMethodId, () => ReturnType<typeof CalculationMethod.Other>> = {
@@ -123,4 +124,46 @@ export function prayerDayContext(now: Date, settings: UserSettings): PrayerDayCo
   const yesterdayWindows = namazWindowsForDate(day.subtract(1, 'day').format('YYYY-MM-DD'), settings);
   const current = findCurrentWindow([...yesterdayWindows, ...windows], now);
   return { dayKey, windows, yesterdayWindows, current };
+}
+
+export interface PrayerStatus {
+  /** Намаз, время которого уже наступило; нет — после полуночи до Фаджра. */
+  current?: PrayerName;
+  /** Начало текущего промежутка (для полосы прогресса); после полуночи — вчерашний Иша. */
+  since: Date;
+  next: PrayerName;
+  nextAt: Date;
+}
+
+/**
+ * Один ориентир для блока намаза на «Сегодня» (docs/spec/today.md): какой намаз
+ * уже наступил и сколько осталось до следующего. Цикл: «До Фаджра» (после
+ * полуночи, без заголовка) → Фаджр → Зухр → Аср → Магриб → Иша → «До Фаджра»
+ * следующего дня. Допущение: заголовок «Фаджр» держится до Зухра (как в задании),
+ * восход отдельным состоянием не выделяется.
+ */
+export function prayerStatus(now: Date, settings: UserSettings): PrayerStatus | null {
+  const day = dayjs(now).startOf('day').hour(12);
+  const today = calculatePrayerTimesForDate(day.toDate(), settings);
+  if (!today) return null;
+  const at = (p: PrayerName, times: PrayerTimesForDay) => new Date(times[p]);
+  const ts = now.getTime();
+
+  if (ts < at('fajr', today).getTime()) {
+    const yesterday = calculatePrayerTimesForDate(day.subtract(1, 'day').toDate(), settings);
+    const since = yesterday ? at('isha', yesterday) : dayjs(now).startOf('day').toDate();
+    return { since, next: 'fajr', nextAt: at('fajr', today) };
+  }
+  let idx = 0;
+  PRAYER_ORDER.forEach((p, i) => {
+    if (at(p, today).getTime() <= ts) idx = i;
+  });
+  const current = PRAYER_ORDER[idx];
+  if (current === 'isha') {
+    const tomorrow = calculatePrayerTimesForDate(day.add(1, 'day').toDate(), settings);
+    const nextAt = tomorrow ? at('fajr', tomorrow) : dayjs(now).endOf('day').toDate();
+    return { current, since: at('isha', today), next: 'fajr', nextAt };
+  }
+  const next = PRAYER_ORDER[idx + 1];
+  return { current, since: at(current, today), next, nextAt: at(next, today) };
 }

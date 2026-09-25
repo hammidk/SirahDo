@@ -8,7 +8,6 @@ import type {
   Calendar,
   CalendarEvent,
   DiaryEntry,
-  Filter,
   Habit,
   HabitLog,
   NamazWindowName,
@@ -30,7 +29,7 @@ const KEYS = {
   projects: 'sirahdo:projects',
   sections: 'sirahdo:sections',
   tags: 'sirahdo:tags',
-  filters: 'sirahdo:filters',
+  legacyFilters: 'sirahdo:filters', // до v4 — пользовательские фильтры; удаляется миграцией
   calendars: 'sirahdo:calendars',
   events: 'sirahdo:events',
   habits: 'sirahdo:habits',
@@ -39,7 +38,7 @@ const KEYS = {
   settings: 'sirahdo:settings',
 };
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   const raw = await AsyncStorage.getItem(key);
@@ -171,8 +170,6 @@ export const sections = collection<Section, 'order'>(KEYS.sections, (all, input)
 
 export const tags = collection<Tag, never>(KEYS.tags, () => ({}));
 
-export const filters = collection<Filter, 'order'>(KEYS.filters, (all) => ({ order: nextOrder(all) }));
-
 export const calendars = collection<Calendar, 'order' | 'visible'>(KEYS.calendars, (all) => ({
   order: nextOrder(all),
   visible: true,
@@ -184,7 +181,7 @@ export const events = collection<CalendarEvent, 'createdAt' | 'reminders' | 'lin
   links: [],
 }));
 
-export const habits = collection<Habit, 'order' | 'createdAt' | 'reminders' | 'weekdays' | 'targetCountPerDay'>(
+export const habits = collection<Habit, 'order' | 'createdAt' | 'reminders' | 'weekdays' | 'targetCountPerDay' | 'color'>(
   KEYS.habits,
   (all) => ({
     order: nextOrder(all),
@@ -192,6 +189,7 @@ export const habits = collection<Habit, 'order' | 'createdAt' | 'reminders' | 'w
     reminders: [],
     weekdays: [1, 2, 3, 4, 5, 6, 7],
     targetCountPerDay: 1,
+    color: CATEGORY_COLORS[all.length % CATEGORY_COLORS.length],
   })
 );
 
@@ -225,6 +223,7 @@ export async function migrate(): Promise<void> {
   const version = Number((await AsyncStorage.getItem(KEYS.schemaVersion)) ?? '1');
   if (version < 2) await migrateV1toV2();
   if (version < 3) await migrateV2toV3();
+  if (version < 4) await migrateV3toV4();
   await AsyncStorage.setItem(KEYS.schemaVersion, String(SCHEMA_VERSION));
 }
 
@@ -349,4 +348,31 @@ async function migrateV2toV3(): Promise<void> {
   await writeJson(KEYS.tags, tagList.map((t) => ({ ...t, color: remapColor(t.color) })));
   const eventList = await readJson<CalendarEvent[]>(KEYS.events, []);
   await writeJson(KEYS.events, eventList.map((e) => ({ ...e, colorOverride: remapColor(e.colorOverride) })));
+}
+
+// Эмодзи-иконки привычек до v4 → id из набора line-иконок (lib/habits.ts).
+const LEGACY_HABIT_EMOJI: Record<string, string> = {
+  '📿': 'prayer', '📖': 'book', '🕌': 'prayer', '🤲': 'prayer', '🌙': 'prayer', '☀️': 'star',
+  '💧': 'water', '🏃': 'cardio', '🚶': 'walk', '🧘': 'prayer', '🥗': 'food', '🍎': 'food',
+  '💤': 'sleep', '📚': 'study', '✍️': 'journal', '💰': 'money', '🤝': 'star', '👨‍👩‍👧': 'star',
+  '❤️': 'star', '🌱': 'star', '🧹': 'cleaning', '📵': 'phone', '🦷': 'check', '🎯': 'flag',
+};
+
+type HabitV3 = Omit<Habit, 'color'> & { color?: string; sphere?: string };
+
+/**
+ * v4 (docs/DECISIONS.md, D22–D24): у привычки — id line-иконки и цвет, без сферы;
+ * пользовательские фильтры заменены фиксированным списком — старый ключ удаляется.
+ */
+async function migrateV3toV4(): Promise<void> {
+  const list = await readJson<HabitV3[]>(KEYS.habits, []);
+  await writeJson<Habit[]>(
+    KEYS.habits,
+    list.map(({ sphere: _sphere, ...h }, i) => ({
+      ...h,
+      icon: LEGACY_HABIT_EMOJI[h.icon] ?? (h.icon && /^[a-z-]+$/.test(h.icon) ? h.icon : 'dot'),
+      color: h.color ?? CATEGORY_COLORS[i % CATEGORY_COLORS.length],
+    }))
+  );
+  await AsyncStorage.removeItem(KEYS.legacyFilters);
 }

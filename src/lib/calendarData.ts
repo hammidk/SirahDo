@@ -24,9 +24,10 @@ export interface DayData {
 
 export function collectDay(
   date: string,
-  src: { events: CalendarEvent[]; calendars: Calendar[]; tasks: Task[]; settings: UserSettings }
+  src: { events: CalendarEvent[]; calendars: Calendar[]; tasks: Task[]; settings: UserSettings },
+  opts: { alwaysShowTasks?: boolean } = {} // «Сегодня» показывает задачи независимо от слоя Календаря
 ): DayData {
-  const showTasks = src.settings.showTasksInCalendar !== false;
+  const showTasks = opts.alwaysShowTasks || src.settings.showTasksInCalendar !== false;
   return {
     date,
     events: eventsOnDate(src.events, src.calendars, date),

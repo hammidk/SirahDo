@@ -117,7 +117,30 @@ export function totalDoneDays(habit: Habit, logs: HabitLog[]): number {
   return logs.filter((l) => l.habitId === habit.id && l.completedCount >= habit.targetCountPerDay).length;
 }
 
-export const HABIT_ICONS = [
-  '📿', '📖', '🕌', '🤲', '🌙', '☀️', '💧', '🏃', '🚶', '🧘', '🥗', '🍎',
-  '💤', '📚', '✍️', '💰', '🤝', '👨‍👩‍👧', '❤️', '🌱', '🧹', '📵', '🦷', '🎯',
+// Набор иконок привычек (line-иконки в стиле Notion, рисует components/HabitIcon.tsx):
+// 17 под типичные привычки + 4 нейтральные, чтобы подходящая нашлась для любой.
+export const HABIT_ICONS: { id: string; label: string }[] = [
+  { id: 'water', label: 'Вода' },
+  { id: 'sleep', label: 'Сон' },
+  { id: 'sport', label: 'Спорт' },
+  { id: 'book', label: 'Книга' },
+  { id: 'prayer', label: 'Молитва, размышление' },
+  { id: 'food', label: 'Здоровое питание' },
+  { id: 'cardio', label: 'Зарядка, бег' },
+  { id: 'money', label: 'Финансы' },
+  { id: 'study', label: 'Работа, учёба' },
+  { id: 'tea', label: 'Чай, кофе' },
+  { id: 'no-smoking', label: 'Без сигарет' },
+  { id: 'phone', label: 'Экранное время' },
+  { id: 'walk', label: 'Прогулка' },
+  { id: 'pills', label: 'Витамины' },
+  { id: 'cleaning', label: 'Уборка' },
+  { id: 'music', label: 'Музыка' },
+  { id: 'journal', label: 'Дневник' },
+  { id: 'star', label: 'Звезда' },
+  { id: 'check', label: 'Галочка' },
+  { id: 'dot', label: 'Круг' },
+  { id: 'flag', label: 'Флажок' },
 ];
+
+export const DEFAULT_HABIT_ICON = 'check';

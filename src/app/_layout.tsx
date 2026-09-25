@@ -66,6 +66,7 @@ export default function RootLayout() {
               <Stack.Screen name="history/index" options={{ title: 'История' }} />
               <Stack.Screen name="history/[date]" options={{ title: 'День' }} />
               <Stack.Screen name="tag/[id]" options={{ title: 'Тег' }} />
+              <Stack.Screen name="filters-tags" options={{ title: 'Фильтры и теги' }} />
               <Stack.Screen name="filter/[id]" options={{ title: 'Фильтр' }} />
               <Stack.Screen name="archive" options={{ title: 'Архив проектов' }} />
               <Stack.Screen name="event/[id]" options={{ presentation: 'modal', title: 'Событие' }} />

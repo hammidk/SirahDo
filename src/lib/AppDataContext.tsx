@@ -21,7 +21,6 @@ import type {
   Calendar,
   CalendarEvent,
   DiaryEntry,
-  Filter,
   Habit,
   HabitLog,
   Project,
@@ -45,7 +44,6 @@ export type TaskInput = Parameters<typeof storage.tasks.upsert>[0];
 export type ProjectInput = Parameters<typeof storage.projects.upsert>[0];
 export type SectionInput = Parameters<typeof storage.sections.upsert>[0];
 export type TagInput = Parameters<typeof storage.tags.upsert>[0];
-export type FilterInput = Parameters<typeof storage.filters.upsert>[0];
 export type CalendarInput = Parameters<typeof storage.calendars.upsert>[0];
 export type EventInput = Parameters<typeof storage.events.upsert>[0];
 export type HabitInput = Parameters<typeof storage.habits.upsert>[0];
@@ -70,7 +68,6 @@ interface AppDataContextValue {
   projects: Project[];
   sections: Section[];
   tags: Tag[];
-  filters: Filter[];
   calendars: Calendar[];
   events: CalendarEvent[];
   habits: Habit[];
@@ -95,8 +92,6 @@ interface AppDataContextValue {
 
   addOrUpdateTag: (tag: TagInput) => Promise<Tag>;
   removeTag: (id: string) => Promise<void>;
-  addOrUpdateFilter: (filter: FilterInput) => Promise<Filter>;
-  removeFilter: (id: string) => Promise<void>;
 
   addOrUpdateCalendar: (calendar: CalendarInput) => Promise<Calendar>;
   removeCalendar: (id: string) => Promise<boolean>;
@@ -142,7 +137,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [sections, setSections] = useState<Section[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
-  const [filters, setFilters] = useState<Filter[]>([]);
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -159,12 +153,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   });
 
   const refresh = useCallback(async () => {
-    const [t, p, sec, tg, f, c, e, h, hl, d, s] = await Promise.all([
+    const [t, p, sec, tg, c, e, h, hl, d, s] = await Promise.all([
       storage.tasks.getAll(),
       storage.projects.getAll(),
       storage.sections.getAll(),
       storage.tags.getAll(),
-      storage.filters.getAll(),
       storage.calendars.getAll(),
       storage.events.getAll(),
       storage.habits.getAll(),
@@ -176,7 +169,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     setProjects(p);
     setSections(sec);
     setTags(tg);
-    setFilters(f);
     setCalendars(c);
     setEvents(e);
     setHabits(h);
@@ -416,25 +408,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       (t) => t.tagIds.includes(id),
       (t) => ({ ...t, tagIds: t.tagIds.filter((x) => x !== id) })
     );
-    const changedFilters = await storage.filters.updateWhere(
-      (f) => !!f.criteria.tagIds?.includes(id),
-      (f) => ({ ...f, criteria: { ...f.criteria, tagIds: f.criteria.tagIds!.filter((x) => x !== id) } })
-    );
     await storage.tags.remove(id);
     changedTasks.forEach((t) => putInto(setTasks, t));
-    changedFilters.forEach((f) => putInto(setFilters, f));
     dropFrom(setTags, [id]);
-  }, []);
-
-  const addOrUpdateFilter = useCallback(async (filter: FilterInput) => {
-    const saved = await storage.filters.upsert(filter);
-    putInto(setFilters, saved);
-    return saved;
-  }, []);
-
-  const removeFilter = useCallback(async (id: string) => {
-    await storage.filters.remove(id);
-    dropFrom(setFilters, [id]);
   }, []);
 
   // ---------- Календари и события ----------
@@ -531,7 +507,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     projects,
     sections,
     tags,
-    filters,
     calendars,
     events,
     habits,
@@ -552,8 +527,6 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     removeSection,
     addOrUpdateTag,
     removeTag,
-    addOrUpdateFilter,
-    removeFilter,
     addOrUpdateCalendar,
     removeCalendar,
     addOrUpdateEvent,
@@ -566,10 +539,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     updateSettings,
     requestLocation,
   }), [
-    loading, tasks, projects, sections, tags, filters, calendars, events, habits, habitLogs, diary,
+    loading, tasks, projects, sections, tags, calendars, events, habits, habitLogs, diary,
     settings, locationError, refresh, addOrUpdateTask, completeTask, undoCompleteTask, reopenTask, startTask, removeTask,
     addOrUpdateProject, removeProject, addOrUpdateSection, removeSection, addOrUpdateTag, removeTag,
-    addOrUpdateFilter, removeFilter, addOrUpdateCalendar, removeCalendar, addOrUpdateEvent, removeEvent,
+    addOrUpdateCalendar, removeCalendar, addOrUpdateEvent, removeEvent,
     addOrUpdateHabit, removeHabit, setHabitCount, saveDiaryEntry, removeDiaryEntry, updateSettings, requestLocation,
   ]);
 

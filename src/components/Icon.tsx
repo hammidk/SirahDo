@@ -37,6 +37,7 @@ import {
   Minus,
   Plus,
   Repeat,
+  Search,
   Settings,
   SlidersHorizontal,
   Sparkles,
@@ -86,6 +87,7 @@ const ICONS = {
   eye: Eye,
   link: Link,
   archive: Archive,
+  search: Search,
   // сущности
   inbox: Inbox,
   diary: BookOpen,

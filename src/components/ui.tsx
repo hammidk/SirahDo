@@ -34,6 +34,32 @@ export function FieldLabel({ children, style }: { children: ReactNode; style?: S
   );
 }
 
+/** Секция формы — карточка с чётким заголовком: крупные поля на одном уровне важности. */
+export function FormSection({
+  title,
+  hint,
+  right,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  right?: ReactNode; // элемент справа от заголовка (например, переключатель)
+  children?: ReactNode;
+}) {
+  return (
+    <View style={styles.formSection}>
+      <View style={styles.formSectionHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.formSectionTitle}>{title}</Text>
+          {hint ? <Text style={styles.formSectionHint}>{hint}</Text> : null}
+        </View>
+        {right}
+      </View>
+      {children ? <View style={styles.formSectionBody}>{children}</View> : null}
+    </View>
+  );
+}
+
 export function ChipsRow({ children }: { children: ReactNode }) {
   return <View style={styles.chipsRow}>{children}</View>;
 }
@@ -206,6 +232,11 @@ const styles = StyleSheet.create({
     marginTop: 18,
     marginBottom: 6,
   },
+  formSection: { backgroundColor: COLORS.card, borderRadius: RADIUS.md, padding: 14, marginTop: 12 },
+  formSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  formSectionTitle: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+  formSectionHint: { fontSize: 12, color: COLORS.muted, marginTop: 2 },
+  formSectionBody: { marginTop: 12 },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   chip: {
     paddingVertical: 4,

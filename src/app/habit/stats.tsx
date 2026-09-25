@@ -10,6 +10,7 @@ import { useAppData } from '../../lib/AppDataContext';
 import { bestStreak, dayProgress, logIndex, periodStats } from '../../lib/habits';
 import { DATE_FORMAT, WEEKDAY_SHORT, startOfIsoWeek, todayKey } from '../../lib/dates';
 import { COLORS, Chip, ChipsRow } from '../../components/ui';
+import { HabitIcon } from '../../components/HabitIcon';
 import { withAlpha } from '../../theme/colors';
 
 type Period = 'week' | 'month' | 'year';
@@ -104,11 +105,13 @@ export default function HabitStatsScreen() {
       {perHabit.length === 0 ? <Text style={styles.caption}>Пока нет привычек.</Text> : null}
       {perHabit.map(({ habit, stats, best }) => (
         <View key={habit.id} style={styles.row}>
-          <Text style={styles.icon}>{habit.icon}</Text>
+          <View style={[styles.icon, { backgroundColor: withAlpha(habit.color, 0.18) }]}>
+            <HabitIcon id={habit.icon} size={18} color={habit.color} />
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{habit.name}</Text>
             <View style={styles.track}>
-              <View style={[styles.fill, { width: `${Math.round(stats.rate * 100)}%` }]} />
+              <View style={[styles.fill, { width: `${Math.round(stats.rate * 100)}%`, backgroundColor: habit.color }]} />
             </View>
             <Text style={styles.caption}>
               {stats.doneDays} из {stats.scheduledDays} дн. · лучшая серия {best}
@@ -133,7 +136,7 @@ const styles = StyleSheet.create({
   dow: { fontSize: 10, color: COLORS.muted },
   sectionTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text, marginTop: 18, marginBottom: 8 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.card, borderRadius: 8, padding: 12, marginBottom: 8 },
-  icon: { fontSize: 24 },
+  icon: { width: 34, height: 34, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   name: { fontSize: 15, fontWeight: '600', color: COLORS.text },
   track: { height: 6, borderRadius: 3, backgroundColor: COLORS.background, marginTop: 6, overflow: 'hidden' },
   fill: { height: 6, borderRadius: 3, backgroundColor: COLORS.success },

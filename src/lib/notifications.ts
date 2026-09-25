@@ -131,7 +131,7 @@ function planHabit(habit: Habit): Planned[] {
   habit.reminders.forEach((r, i) => {
     const t = parseTime(r.time);
     if (!t) return;
-    const title = `${habit.icon} ${habit.name}`.trim();
+    const title = habit.name;
     const body = habit.description || 'Время для привычки';
     if (everyDay) {
       result.push({ identifier: `habit:${habit.id}:${i}`, title, body, daily: t });

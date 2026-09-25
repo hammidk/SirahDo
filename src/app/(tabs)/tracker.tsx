@@ -1,9 +1,10 @@
-// Трекер привычек (docs/spec/habits.md): вверху неделя с кружками выполнения, ниже — привычки
-// выбранного дня со счётчиком «N раз в день». Без штрафов: невыполненный день —
-// просто пустой кружок, рядом с серией всегда видна лучшая серия.
+// Трекер привычек (docs/spec/habits.md): вверху неделя с кружками выполнения (листается
+// свайпом), ниже — привычки выбранного дня карточками: каждое выполнение заливает
+// карточку цветом привычки. Без штрафов: невыполненный день — просто пустой кружок,
+// рядом с серией всегда видна лучшая серия.
 
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../../components/themed';
 import { Tabs, router } from 'expo-router';
 import { Icon } from '../../components/Icon';
@@ -11,13 +12,14 @@ import dayjs from 'dayjs';
 
 import { useAppData } from '../../lib/AppDataContext';
 import type { Habit } from '../../lib/types';
-import { SPHERES } from '../../lib/types';
 import { bestStreak, countOn, currentStreak, dayProgress, isScheduled, logIndex } from '../../lib/habits';
 import { DATE_FORMAT, WEEKDAY_SHORT, startOfIsoWeek, todayKey } from '../../lib/dates';
 import { useNow } from '../../lib/hooks';
 import { Fab } from '../../components/Fab';
+import { HabitIcon } from '../../components/HabitIcon';
+import { SwipePager } from '../../components/SwipePager';
 import { COLORS } from '../../components/ui';
-import { withAlpha } from '../../theme/colors';
+import { readableOn, withAlpha } from '../../theme/colors';
 
 
 export default function TrackerScreen() {
@@ -67,40 +69,42 @@ export default function TrackerScreen() {
               <Icon name="chevron-forward" size={20} color={COLORS.muted} />
             </Pressable>
           </View>
-          <View style={styles.weekRow}>
-            {week.map((d, i) => {
-              const p = dayProgress(active, index, d);
-              const future = d > today;
-              const full = p.total > 0 && p.done === p.total;
-              return (
-                <Pressable
-                  key={d}
-                  style={styles.dayCell}
-                  onPress={() => setSelected(d)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${dayjs(d).format('D MMMM')}: выполнено ${p.done} из ${p.total}`}
-                  accessibilityState={{ selected: d === selected }}
-                >
-                  <Text style={[styles.dow, d === today && styles.dowToday]}>{WEEKDAY_SHORT[i]}</Text>
-                  <View
-                    style={[
-                      styles.circle,
-                      p.total === 0 && styles.circleEmpty,
-                      !future && p.total > 0 && { backgroundColor: withAlpha(COLORS.success, 0.1 + 0.6 * p.ratio), borderColor: withAlpha(COLORS.success, 0.6) },
-                      full && styles.circleFull,
-                      d === selected && styles.circleSelected,
-                    ]}
+          <SwipePager onPrev={() => shiftWeek(-1)} onNext={() => shiftWeek(1)}>
+            <View style={styles.weekRow}>
+              {week.map((d, i) => {
+                const p = dayProgress(active, index, d);
+                const future = d > today;
+                const full = p.total > 0 && p.done === p.total;
+                return (
+                  <Pressable
+                    key={d}
+                    style={styles.dayCell}
+                    onPress={() => setSelected(d)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${dayjs(d).format('D MMMM')}: выполнено ${p.done} из ${p.total}`}
+                    accessibilityState={{ selected: d === selected }}
                   >
-                    {full ? (
-                      <Icon name="check" size={16} color={COLORS.onAccent} />
-                    ) : (
-                      <Text style={styles.circleNum}>{dayjs(d).date()}</Text>
-                    )}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+                    <Text style={[styles.dow, d === today && styles.dowToday]}>{WEEKDAY_SHORT[i]}</Text>
+                    <View
+                      style={[
+                        styles.circle,
+                        p.total === 0 && styles.circleEmpty,
+                        !future && p.total > 0 && { backgroundColor: withAlpha(COLORS.success, 0.1 + 0.6 * p.ratio), borderColor: withAlpha(COLORS.success, 0.6) },
+                        full && styles.circleFull,
+                        d === selected && styles.circleSelected,
+                      ]}
+                    >
+                      {full ? (
+                        <Icon name="check" size={16} color={COLORS.onAccent} />
+                      ) : (
+                        <Text style={styles.circleNum}>{dayjs(d).date()}</Text>
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </SwipePager>
           {selected !== today ? (
             <Pressable
               onPress={() => {
@@ -130,7 +134,7 @@ export default function TrackerScreen() {
         {active.length > 0 && scheduled.length === 0 ? <Text style={styles.hint}>На этот день привычек по плану нет.</Text> : null}
 
         {scheduled.map((h) => (
-          <HabitRow
+          <HabitCard
             key={h.id}
             habit={h}
             count={countOn(index, h.id, selected)}
@@ -146,7 +150,7 @@ export default function TrackerScreen() {
             <Text style={styles.subTitle}>Не по плану в этот день</Text>
             {rest.map((h) => (
               <Pressable key={h.id} style={styles.restRow} onPress={() => router.push(`/habit/${h.id}`)} accessibilityRole="button">
-                <Text style={styles.restIcon}>{h.icon}</Text>
+                <HabitIcon id={h.icon} size={16} color={COLORS.tertiary} />
                 <Text style={styles.restName}>{h.name}</Text>
               </Pressable>
             ))}
@@ -158,7 +162,7 @@ export default function TrackerScreen() {
   );
 }
 
-function HabitRow({
+function HabitCard({
   habit,
   count,
   streak,
@@ -175,8 +179,14 @@ function HabitRow({
 }) {
   const target = habit.targetCountPerDay;
   const done = count >= target;
-  const sphere = SPHERES.find((s) => s.id === habit.sphere);
-  const progress = Math.min(1, count / target);
+  const ratio = Math.min(1, count / target);
+
+  // Заливка карточки цветом привычки растёт плавно с каждым выполнением.
+  const [fill] = useState(() => new Animated.Value(ratio));
+  useEffect(() => {
+    Animated.timing(fill, { toValue: ratio, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [fill, ratio]);
+  const fillWidth = fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
 
   // Кнопка: +1 до цели; для привычки «1 раз» — переключатель выполнено/нет.
   const onMain = () => {
@@ -185,45 +195,55 @@ function HabitRow({
     else if (!done) onSet(count + 1);
   };
 
+  const meta =
+    [streak > 0 ? `серия ${streak}` : null, best > 0 ? `лучшая ${best}` : null].filter(Boolean).join(' · ') ||
+    'Первый шаг самый важный';
+
   return (
-    <View style={[styles.habitRow, done && styles.habitRowDone]}>
-      <Pressable style={styles.habitBody} onPress={() => router.push(`/habit/${habit.id}`)} accessibilityRole="button" accessibilityLabel={`${habit.name}, изменить`}>
-        <Text style={styles.habitIcon}>{habit.icon}</Text>
+    <View style={styles.habitCard}>
+      <Animated.View style={[styles.habitFill, { width: fillWidth, backgroundColor: withAlpha(habit.color, 0.22) }]} />
+      <Pressable
+        style={styles.habitBody}
+        onPress={() => router.push(`/habit/${habit.id}`)}
+        accessibilityRole="button"
+        accessibilityLabel={`${habit.name}, ${Math.min(count, target)} из ${target}. Изменить`}
+      >
+        <View style={[styles.habitIconWrap, { backgroundColor: withAlpha(habit.color, 0.18) }]}>
+          <HabitIcon id={habit.icon} size={20} color={habit.color} />
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.habitName} numberOfLines={1}>
             {habit.name}
           </Text>
           <Text style={styles.habitMeta} numberOfLines={1}>
-            {[
-              target > 1 ? `${Math.min(count, target)} из ${target}` : null,
-              streak > 0 ? `серия ${streak}` : null,
-              best > 0 ? `лучшая ${best}` : null,
-              sphere?.title,
-            ]
-              .filter(Boolean)
-              .join(' · ') || 'Новая привычка — первый шаг самый важный'}
+            {target > 1 ? `${Math.min(count, target)} из ${target} · ` : ''}
+            {meta}
           </Text>
-          {target > 1 ? (
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${Math.round(progress * 100)}%` }]} />
-            </View>
-          ) : null}
         </View>
       </Pressable>
       {target > 1 && count > 0 && !disabled ? (
         <Pressable onPress={() => onSet(count - 1)} hitSlop={8} style={styles.minus} accessibilityRole="button" accessibilityLabel="Минус одно выполнение">
-          <Icon name="remove" size={18} color={COLORS.muted} />
+          <Icon name="remove" size={16} color={COLORS.muted} />
         </Pressable>
       ) : null}
       <Pressable
         onPress={onMain}
         disabled={disabled}
-        style={[styles.mainButton, done && styles.mainButtonDone, disabled && { opacity: 0.35 }]}
+        style={[
+          styles.mainButton,
+          { borderColor: habit.color },
+          done && { backgroundColor: habit.color },
+          disabled && { opacity: 0.35 },
+        ]}
         accessibilityRole={target === 1 ? 'checkbox' : 'button'}
         accessibilityState={{ checked: done, disabled }}
         accessibilityLabel={target === 1 ? (done ? 'Снять отметку' : 'Отметить выполнение') : `Плюс одно выполнение, сейчас ${count} из ${target}`}
       >
-        {done ? <Icon name="check" size={22} color={COLORS.onAccent} /> : target > 1 ? <Text style={styles.plus}>+1</Text> : null}
+        {done ? (
+          <Icon name="check" size={20} color={readableOn(habit.color)} strokeWidth={2.5} />
+        ) : target > 1 ? (
+          <Text style={[styles.plus, { color: habit.color }]}>+1</Text>
+        ) : null}
       </Pressable>
     </View>
   );
@@ -259,34 +279,32 @@ const styles = StyleSheet.create({
   empty: { backgroundColor: COLORS.card, borderRadius: 8, padding: 16, gap: 6 },
   emptyTitle: { fontSize: 15, fontWeight: '600', color: COLORS.text },
   emptyText: { fontSize: 13, color: COLORS.muted, lineHeight: 19 },
-  habitRow: {
+  habitCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.separator,
+    backgroundColor: COLORS.card,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
-  habitRowDone: { opacity: 0.8 },
+  habitFill: { position: 'absolute', left: 0, top: 0, bottom: 0, pointerEvents: 'none' },
   habitBody: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  habitIcon: { fontSize: 26 },
+  habitIconWrap: { width: 38, height: 38, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   habitName: { fontSize: 16, fontWeight: '600', color: COLORS.text },
   habitMeta: { fontSize: 12, color: COLORS.muted, marginTop: 2 },
-  progressTrack: { height: 4, borderRadius: 2, backgroundColor: COLORS.background, marginTop: 6, overflow: 'hidden' },
-  progressFill: { height: 4, borderRadius: 2, backgroundColor: COLORS.success },
-  minus: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.background },
+  minus: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.hover },
   mainButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
     borderWidth: 2,
-    borderColor: COLORS.success,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mainButtonDone: { backgroundColor: COLORS.success },
-  plus: { fontSize: 14, fontWeight: '700', color: COLORS.success },
+  plus: { fontSize: 14, fontWeight: '700' },
   restRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
-  restIcon: { fontSize: 18, opacity: 0.6 },
   restName: { fontSize: 14, color: COLORS.muted },
 });

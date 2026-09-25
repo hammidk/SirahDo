@@ -1,6 +1,6 @@
-// Экран «Сегодня» (docs/spec/today.md): день вокруг намазов. Шапка с датой и хиджрой,
-// текущее окно с таймером, «Фокус дня», привычки, лента 5 окон с задачами и
-// событиями, вечерний итог → Дневник.
+// Экран «Сегодня» (docs/spec/today.md): ориентир намаза с датой → «Без времени»
+// (сворачиваемый блок) → просроченные → расписание дня шкалой, как в Календаре,
+// с намазами-якорями → вечерний итог → Дневник.
 
 import { useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
@@ -9,28 +9,26 @@ import { router } from 'expo-router';
 import dayjs from 'dayjs';
 
 import { useAppData } from '../../lib/AppDataContext';
-import { prayerDayContext } from '../../lib/prayerTimes';
-import { buildDayPlan } from '../../lib/dayPlan';
-import { eventsOnDate } from '../../lib/events';
-import { getDayFocus } from '../../lib/dayFocus';
+import { prayerStatus } from '../../lib/prayerTimes';
+import { collectDay, minutesInDay } from '../../lib/calendarData';
 import { formatHijri, toHijri } from '../../lib/hijri';
-import { isoWeekday, toDateKey } from '../../lib/dates';
+import { DATE_FORMAT, dueMoment, isoWeekday, parseTime, toDateKey } from '../../lib/dates';
 import { useNow } from '../../lib/hooks';
+import { NAMAZ_WINDOW_ORDER } from '../../lib/types';
+import type { Task } from '../../lib/types';
 import { TaskCard } from '../../components/TaskCard';
 import { Fab } from '../../components/Fab';
 import { useTaskSheet } from '../../components/TaskSheet';
-import type { NamazWindowName } from '../../lib/types';
+import { CollapsibleSection } from '../../components/Collapsible';
+import { DayTimeline } from '../../components/calendar/CalendarViews';
+import type { ViewHandlers } from '../../components/calendar/CalendarViews';
 import { COLORS } from '../../components/ui';
-import {
-  EventRow,
-  EveningCard,
-  FocusCard,
-  HabitsToday,
-  NowCard,
-  OverdueSection,
-  SectionHeader,
-  WindowSection,
-} from '../../components/today';
+import { EventRow, EveningCard, OverdueSection, PrayerCard } from '../../components/today';
+
+const HOUR_HEIGHT = 52;
+
+// Порядок в «Без времени»: сначала без окна намаза, затем по окнам дня, внутри — по приоритету.
+const windowRank = (t: Task) => (t.namazWindow ? NAMAZ_WINDOW_ORDER.indexOf(t.namazWindow) + 1 : 0);
 
 export default function TodayScreen() {
   const {
@@ -45,22 +43,31 @@ export default function TodayScreen() {
     locationError,
     refresh,
     addOrUpdateTask,
-    setHabitCount,
+    reopenTask,
   } = useAppData();
   const [refreshing, setRefreshing] = useState(false);
-  const { openTask } = useTaskSheet();
+  const { openTask, completeWithFeedback } = useTaskSheet();
   const now = useNow(30_000);
 
   // Всё, что зависит от дня, пересчитывается при смене даты (в том числе в полночь).
-  const ctx = useMemo(() => prayerDayContext(now, settings), [now, settings]);
-  const todayStr = ctx.dayKey;
+  const todayStr = dayjs(now).format(DATE_FORMAT);
   const hijri = useMemo(() => toHijri(todayStr, settings.hijriOffset ?? 0), [todayStr, settings.hijriOffset]);
   const hasLocation = settings.latitude != null && settings.longitude != null;
+  const weekdayDate = dayjs(now).format('dd, D MMMM');
+  const dateLabel = `${weekdayDate.charAt(0).toUpperCase()}${weekdayDate.slice(1)} · ${formatHijri(hijri)}`;
 
-  const todayTasks = useMemo(
-    () => tasks.filter((t) => t.status === 'active' && t.due?.date === todayStr),
-    [tasks, todayStr]
+  const day = useMemo(
+    () => collectDay(todayStr, { events, calendars, tasks, settings }, { alwaysShowTasks: true }),
+    [todayStr, events, calendars, tasks, settings]
   );
+  const untimedTasks = useMemo(
+    () =>
+      day.tasks
+        .filter((t) => t.status === 'active' && !parseTime(t.due?.time))
+        .sort((a, b) => windowRank(a) - windowRank(b) || a.priority - b.priority),
+    [day.tasks]
+  );
+  const allDayEvents = day.events.filter((o) => o.event.allDay);
   const overdue = useMemo(
     () =>
       tasks
@@ -68,40 +75,30 @@ export default function TodayScreen() {
         .sort((a, b) => a.due!.date.localeCompare(b.due!.date)),
     [tasks, todayStr]
   );
-  const todayEvents = useMemo(() => eventsOnDate(events, calendars, todayStr), [events, calendars, todayStr]);
 
-  const plan = useMemo(
-    () => buildDayPlan({ tasks: todayTasks, events: todayEvents, windows: ctx.windows, now }),
-    [todayTasks, todayEvents, ctx.windows, now]
-  );
-
-  const focus = getDayFocus({
-    now,
-    hijri,
-    windows: ctx.windows,
-    yesterdayWindows: ctx.yesterdayWindows,
-    currentWindow: ctx.current,
-  });
+  // Шкала начинается за час до текущего времени, а если какое-то дело дня раньше — с его часа.
+  // Допущение: пустые утренние часы не показываем, чтобы «сейчас» было видно без прокрутки.
+  const fromHour = useMemo(() => {
+    let min = Math.max(0, now.getHours() - 1) * 60;
+    for (const o of day.events) if (!o.event.allDay) min = Math.min(min, minutesInDay(o.start, todayStr));
+    for (const t of day.tasks) if (t.due && parseTime(t.due.time)) min = Math.min(min, minutesInDay(dueMoment(t.due), todayStr));
+    return Math.floor(min / 60);
+  }, [day, now, todayStr]);
 
   const weekday = isoWeekday(dayjs(now));
-  const todayHabits = useMemo(
-    () => habits.filter((h) => !h.archived && h.weekdays.includes(weekday)).sort((a, b) => a.order - b.order),
-    [habits, weekday]
-  );
-  const todayLogs = useMemo(() => habitLogs.filter((l) => l.date === todayStr), [habitLogs, todayStr]);
+  const todayHabits = useMemo(() => habits.filter((h) => !h.archived && h.weekdays.includes(weekday)), [habits, weekday]);
   const habitsDone = todayHabits.filter(
-    (h) => (todayLogs.find((l) => l.habitId === h.id)?.completedCount ?? 0) >= h.targetCountPerDay
+    (h) => (habitLogs.find((l) => l.habitId === h.id && l.date === todayStr)?.completedCount ?? 0) >= h.targetCountPerDay
   ).length;
-
   const doneToday = useMemo(
     () => tasks.filter((t) => t.status === 'done' && t.endedAt && toDateKey(t.endedAt) === todayStr).length,
     [tasks, todayStr]
   );
-  const maghrib = ctx.windows.find((w) => w.name === 'maghrib_isha')?.start;
-  // После Магриба (без локации — после 18:00) или после полуночи до Фаджра,
-  // когда ещё идёт ночь прошедшего дня, — акцент на вечернем итоге.
-  const nightOfYesterday = !!ctx.current && ctx.current.date < todayStr;
-  const afterMaghrib = (maghrib ? now >= new Date(maghrib) : now.getHours() >= 18) || nightOfYesterday;
+  // После Магриба (без местоположения — после 18:00) и ночью до Фаджра — акцент на вечернем итоге.
+  const status = prayerStatus(now, settings);
+  const afterMaghrib = status
+    ? !status.current || status.current === 'maghrib' || status.current === 'isha'
+    : now.getHours() >= 18;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -116,10 +113,16 @@ export default function TodayScreen() {
     }
   };
 
-  // «+» — компактный вид задачи на сегодня (из секции окна — сразу в это окно).
-  const addTask = (window?: NamazWindowName) => openTask({ defaults: { due: { date: todayStr }, namazWindow: window } });
+  const handlers: ViewHandlers = {
+    onPressEvent: (occ) => router.push({ pathname: '/event/[id]', params: { id: occ.event.id } }),
+    onPressTask: (task) => openTask({ taskId: task.id }),
+    // Тап по пустому часу на «Сегодня» — новая задача на этот час (в Календаре — событие).
+    onPressSlot: (date, hour) => openTask({ defaults: { due: { date, time: `${String(hour).padStart(2, '0')}:00` } } }),
+    onPressDay: () => {},
+    onToggleTask: (task) => (task.status === 'done' ? reopenTask(task.id) : completeWithFeedback(task.id)),
+  };
 
-  const showAnytime = plan.anytime.tasks.length > 0 || plan.anytime.events.length > 0;
+  const untimedCount = untimedTasks.length + allDayEvents.length;
 
   return (
     <View style={styles.container}>
@@ -128,46 +131,26 @@ export default function TodayScreen() {
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        <Text style={styles.dateLabel}>{dayjs(now).format('dddd, D MMMM')}</Text>
-        <Text style={styles.hijriLabel}>{formatHijri(hijri)}</Text>
-
-        <NowCard
-          current={ctx.current}
-          now={now}
-          hasLocation={hasLocation}
-          onSetupLocation={() => router.push('/profile')}
-        />
+        <PrayerCard settings={settings} dateLabel={dateLabel} onSetupLocation={() => router.push('/profile')} />
         {!hasLocation && !loading && locationError ? <Text style={styles.hint}>{locationError}</Text> : null}
 
-        <FocusCard items={focus} />
-
-        <HabitsToday habits={todayHabits} logs={todayLogs} onSetCount={(h, c) => setHabitCount(h.id, todayStr, c)} />
+        {untimedCount > 0 ? (
+          <CollapsibleSection title="Без времени" count={untimedCount}>
+            {allDayEvents.map((occ) => (
+              <EventRow key={occ.key} occ={occ} />
+            ))}
+            {untimedTasks.map((t) => (
+              <TaskCard key={t.id} task={t} showProject />
+            ))}
+          </CollapsibleSection>
+        ) : null}
 
         <OverdueSection tasks={overdue} onMoveToToday={moveOverdueToToday} />
 
-        {showAnytime || ctx.windows.length === 0 ? (
-          <View>
-            <SectionHeader title="В течение дня" />
-            {plan.anytime.events.map((occ) => (
-              <EventRow key={occ.key} occ={occ} />
-            ))}
-            {plan.anytime.tasks.map((t) => (
-              <TaskCard key={t.id} task={t} showProject />
-            ))}
-            {!showAnytime ? <Text style={styles.hint}>На сегодня задач нет — нажмите «+», чтобы добавить.</Text> : null}
-          </View>
-        ) : null}
+        <Text style={styles.sectionTitle}>Расписание</Text>
+        <DayTimeline day={day} fromHour={fromHour} hourHeight={HOUR_HEIGHT} now={now} handlers={handlers} />
 
-        {plan.windows.length > 0 ? (
-          <View>
-            <SectionHeader title="Окна намаза" />
-            {plan.windows.map((p) => (
-              <WindowSection key={p.window.id} plan={p} onAdd={() => addTask(p.window.name)} />
-            ))}
-          </View>
-        ) : null}
-
-        <View style={{ height: 12 }} />
+        <View style={{ height: 16 }} />
         <EveningCard
           highlighted={afterMaghrib}
           doneCount={doneToday}
@@ -177,7 +160,7 @@ export default function TodayScreen() {
           onOpenDiary={() => router.push(`/diary/${todayStr}`)}
         />
       </ScrollView>
-      <Fab accessibilityLabel="Новая задача на сегодня" onPress={() => addTask()} />
+      <Fab accessibilityLabel="Новая задача на сегодня" onPress={() => openTask({ defaults: { due: { date: todayStr } } })} />
     </View>
   );
 }
@@ -186,7 +169,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   screen: { flex: 1, backgroundColor: COLORS.background },
   content: { padding: 16, paddingBottom: 96 },
-  dateLabel: { fontSize: 24, fontWeight: '700', color: COLORS.text, textTransform: 'capitalize' },
-  hijriLabel: { fontSize: 14, color: COLORS.muted, marginTop: 2, marginBottom: 14 },
+  sectionTitle: { fontSize: 16, fontWeight: '600', color: COLORS.text, marginTop: 16 },
   hint: { color: COLORS.muted, fontSize: 13, paddingVertical: 8 },
 });

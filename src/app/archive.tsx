@@ -4,7 +4,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from '../components/themed';
 
 import { useAppData } from '../lib/AppDataContext';
-import { plural } from '../lib/recurrence';
+import { plural } from '../lib/dates';
 import { COLORS, confirmDestructive } from '../components/ui';
 
 export default function ArchiveScreen() {

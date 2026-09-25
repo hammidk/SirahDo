@@ -1,6 +1,7 @@
 // Календарь (docs/spec/calendar.md): вверху — месяц (тап раскрывает сетку для быстрого перехода),
 // гамбургер — режим и календари. Режимы: Расписание / День / Неделя / Месяц.
-// «+» создаёт событие. Намазы — несдвигаемые якоря на шкале дня.
+// Горизонтальный свайп листает период текущего режима. «+» создаёт событие.
+// Намазы — несдвигаемые якоря на шкале дня.
 
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -17,6 +18,7 @@ import { useNow } from '../../lib/hooks';
 import { Fab } from '../../components/Fab';
 import { useTaskSheet } from '../../components/TaskSheet';
 import { CalendarGrid } from '../../components/CalendarGrid';
+import { SwipePager } from '../../components/SwipePager';
 import { CalendarDrawer } from '../../components/calendar/CalendarDrawer';
 import { AgendaView, MonthView, TimelineView } from '../../components/calendar/CalendarViews';
 import type { ViewHandlers } from '../../components/calendar/CalendarViews';
@@ -114,8 +116,9 @@ export default function CalendarScreen() {
               hitSlop={10}
               style={styles.headerButton}
               accessibilityRole="button"
+              accessibilityLabel="Перейти к сегодня"
             >
-              <Text style={styles.todayButton}>Сегодня</Text>
+              <Text style={[styles.todayButton, selected === todayKey() && styles.todayButtonCurrent]}>Сегодня</Text>
             </Pressable>
           ),
         }}
@@ -150,11 +153,14 @@ export default function CalendarScreen() {
         </Pressable>
       </View>
 
-      {mode === 'day' || mode === 'week' ? (
-        <TimelineView days={days} hourHeight={mode === 'day' ? 56 : 44} now={now} handlers={handlers} />
-      ) : null}
-      {mode === 'month' ? <MonthView month={sel} selected={selected} dayData={dayMap} now={now} handlers={handlers} /> : null}
-      {mode === 'agenda' ? <AgendaView days={days} now={now} hijriOffset={settings.hijriOffset ?? 0} handlers={handlers} /> : null}
+      {/* Свайп влево/вправо — следующий/предыдущий день, неделя или месяц (как стрелки). */}
+      <SwipePager style={styles.pager} onPrev={() => step(-1)} onNext={() => step(1)}>
+        {mode === 'day' || mode === 'week' ? (
+          <TimelineView days={days} hourHeight={mode === 'day' ? 56 : 44} now={now} handlers={handlers} />
+        ) : null}
+        {mode === 'month' ? <MonthView month={sel} selected={selected} dayData={dayMap} now={now} handlers={handlers} /> : null}
+        {mode === 'agenda' ? <AgendaView days={days} now={now} hijriOffset={settings.hijriOffset ?? 0} handlers={handlers} /> : null}
+      </SwipePager>
 
       <Fab accessibilityLabel="Новое событие" onPress={() => newEvent(selected)} />
       <CalendarDrawer visible={drawerOpen} mode={mode} onChangeMode={setMode} onClose={() => setDrawerOpen(false)} />
@@ -167,7 +173,19 @@ const styles = StyleSheet.create({
   titleButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   title: { fontSize: 17, fontWeight: '600', color: COLORS.text, textTransform: 'capitalize' },
   headerButton: { paddingHorizontal: 16 },
-  todayButton: { fontSize: 15, color: COLORS.primary, fontWeight: '500' },
+  // «Сегодня» — обычный текст на фоне-плашке, без синего (docs/spec/design.md).
+  todayButton: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: COLORS.text,
+    backgroundColor: COLORS.hover,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    overflow: 'hidden',
+  },
+  todayButtonCurrent: { color: COLORS.muted, backgroundColor: 'transparent' },
+  pager: { flex: 1 },
   picker: { backgroundColor: COLORS.card, padding: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.separator },
   navRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 6 },
   navText: { flex: 1, fontSize: 13, color: COLORS.muted, textTransform: 'capitalize' },

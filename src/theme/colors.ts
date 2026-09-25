@@ -31,6 +31,15 @@ export function withAlpha(hex: string, alpha: number): string {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
+/** Цвет текста/значка поверх заливки цветом категории: тёмный, а на тёмных тонах (коричневый) — светлый. */
+export function readableOn(hex: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return palette.bgPrimary;
+  const n = parseInt(m[1], 16);
+  const lum = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return lum < 0.35 ? palette.textPrimary : palette.bgPrimary;
+}
+
 /** Фон «тега» в стиле Notion: цвет категории на 15% прозрачности. */
 export const tagBackground = (color: string) => withAlpha(color, 0.15);
 

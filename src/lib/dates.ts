@@ -77,6 +77,26 @@ export function isOverdue(due: TaskDue, now: Dayjs = dayjs()): boolean {
   return due.date < now.format(DATE_FORMAT);
 }
 
+/** Русское склонение по числу: 1 день, 2 дня, 5 дней. */
+export function plural(n: number, forms: [string, string, string]): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return forms[1];
+  return forms[2];
+}
+
+/** 182 → «3 часа 2 минуты», 42 → «42 минуты», 60 → «1 час», 0 → «меньше минуты». */
+export function formatDurationLong(total: number): string {
+  const m = Math.max(0, Math.round(total));
+  if (m === 0) return 'меньше минуты';
+  const h = Math.floor(m / 60);
+  const rest = m % 60;
+  const hours = h > 0 ? `${h} ${plural(h, ['час', 'часа', 'часов'])}` : '';
+  const minutes = rest > 0 ? `${rest} ${plural(rest, ['минута', 'минуты', 'минут'])}` : '';
+  return [hours, minutes].filter(Boolean).join(' ');
+}
+
 /** 75 → «1 ч 15 мин», 40 → «40 мин», 120 → «2 ч». */
 export function formatMinutes(total: number): string {
   const m = Math.max(0, Math.round(total));

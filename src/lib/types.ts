@@ -80,6 +80,28 @@ export const NAMAZ_WINDOW_START_PRAYER: Record<NamazWindowName, string> = {
   isha_fajr: 'Иша',
 };
 
+// Пять намазов — для блока «До следующего намаза» на экране «Сегодня».
+export type PrayerName = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
+
+export const PRAYER_ORDER: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
+export const PRAYER_TITLES: Record<PrayerName, string> = {
+  fajr: 'Фаджр',
+  dhuhr: 'Зухр',
+  asr: 'Аср',
+  maghrib: 'Магриб',
+  isha: 'Иша',
+};
+
+// Родительный падеж: «До Асра», «До Иши».
+export const PRAYER_TITLES_GENITIVE: Record<PrayerName, string> = {
+  fajr: 'Фаджра',
+  dhuhr: 'Зухра',
+  asr: 'Асра',
+  maghrib: 'Магриба',
+  isha: 'Иши',
+};
+
 export const NAMAZ_WINDOW_ORDER: NamazWindowName[] = [
   'fajr_dhuhr',
   'dhuhr_asr',
@@ -160,23 +182,8 @@ export interface Tag {
   favorite?: boolean;
 }
 
+// Фильтры — фиксированный список из 4 (docs/spec/overview.md), не хранятся в данных.
 export type DueFilter = 'today' | 'week' | 'overdue' | 'none';
-
-export interface FilterCriteria {
-  spheres?: SphereId[];
-  tagIds?: string[];
-  intentionTags?: IntentionTagId[];
-  priorities?: Priority[];
-  due?: DueFilter;
-}
-
-export interface Filter {
-  id: string;
-  name: string;
-  criteria: FilterCriteria;
-  favorite?: boolean;
-  order: number;
-}
 
 export interface ChecklistItem {
   id: string;
@@ -256,9 +263,9 @@ export const CALENDAR_COLORS: string[] = [...CATEGORY_COLORS];
 export interface Habit {
   id: string;
   name: string;
-  icon: string; // эмодзи
+  icon: string; // id иконки из набора HABIT_ICONS (lib/habits.ts)
+  color: string; // цвет карточки и заливки прогресса — из CATEGORY_COLORS
   description?: string;
-  sphere?: SphereId;
   targetCountPerDay: number; // по умолчанию 1
   weekdays: number[]; // ISO 1..7; все 7 — каждый день
   reminders: HabitReminder[];

@@ -27,6 +27,8 @@ export interface ViewHandlers {
   onPressTask: (task: Task) => void;
   onPressSlot: (date: string, hour: number) => void;
   onPressDay: (date: string) => void;
+  /** Если задан — у задач на шкале есть кружок «выполнить» (экран «Сегодня»). */
+  onToggleTask?: (task: Task) => void;
 }
 
 const taskColor = (t: Task) => (t.status === 'done' ? COLORS.muted : (PRIORITIES.find((p) => p.id === t.priority)?.color ?? COLORS.muted));
@@ -144,18 +146,61 @@ export function TimelineView({
 
       <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ height: hourHeight * 24 + 16 }}>
         <View style={{ flexDirection: 'row', height: hourHeight * 24 }}>
-          <View style={{ width: GUTTER }}>
-            {Array.from({ length: 24 }, (_, h) => (
-              <Text key={h} style={[styles.hourLabel, { top: h * hourHeight - 7 }]}>
-                {h === 0 ? '' : `${String(h).padStart(2, '0')}:00`}
-              </Text>
-            ))}
-          </View>
+          <HourGutter fromHour={0} hourHeight={hourHeight} />
           {days.map((d) => (
             <DayColumn key={d.date} day={d} hourHeight={hourHeight} now={now} isToday={d.date === todayKey} compact={compact} handlers={handlers} />
           ))}
         </View>
       </ScrollView>
+    </View>
+  );
+}
+
+/**
+ * Шкала одного дня без собственной прокрутки — для встраивания в экран «Сегодня».
+ * Начинается с часа fromHour (более ранние пустые часы не показываются), идёт до 24:00.
+ */
+export function DayTimeline({
+  day,
+  fromHour,
+  hourHeight,
+  now,
+  handlers,
+}: {
+  day: DayData;
+  fromHour: number;
+  hourHeight: number;
+  now: Date;
+  handlers: ViewHandlers;
+}) {
+  const hours = 24 - fromHour;
+  return (
+    <View style={{ flexDirection: 'row', height: hours * hourHeight, marginTop: 8 }}>
+      <HourGutter fromHour={fromHour} hourHeight={hourHeight} />
+      <DayColumn
+        day={day}
+        hourHeight={hourHeight}
+        now={now}
+        isToday={day.date === dayjs(now).format(DATE_FORMAT)}
+        compact={false}
+        handlers={handlers}
+        fromHour={fromHour}
+      />
+    </View>
+  );
+}
+
+function HourGutter({ fromHour, hourHeight }: { fromHour: number; hourHeight: number }) {
+  return (
+    <View style={{ width: GUTTER }}>
+      {Array.from({ length: 24 - fromHour }, (_, i) => {
+        const h = fromHour + i;
+        return (
+          <Text key={h} style={[styles.hourLabel, { top: i * hourHeight - 7 }]}>
+            {h === 0 ? '' : `${String(h).padStart(2, '0')}:00`}
+          </Text>
+        );
+      })}
     </View>
   );
 }
@@ -167,6 +212,7 @@ function DayColumn({
   isToday,
   compact,
   handlers,
+  fromHour = 0,
 }: {
   day: DayData;
   hourHeight: number;
@@ -174,28 +220,35 @@ function DayColumn({
   isToday: boolean;
   compact: boolean;
   handlers: ViewHandlers;
+  fromHour?: number;
 }) {
-  const blocks = blocksOf(day);
+  const offset = fromHour * 60;
+  const blocks = blocksOf(day).filter((b) => b.endMin > offset);
   const placed = layoutDay(blocks);
   const byKey = new Map(blocks.map((b) => [b.key, b]));
   const pxPerMin = hourHeight / 60;
-  const nowTop = minutesInDay(dayjs(now), day.date) * pxPerMin;
+  const nowTop = (minutesInDay(dayjs(now), day.date) - offset) * pxPerMin;
 
   return (
     <View style={[styles.dayColumn, compact && styles.dayColumnCompact]}>
-      {/* Сетка часов; тап по пустому часу — новое событие. */}
-      {Array.from({ length: 24 }, (_, h) => (
-        <Pressable
-          key={h}
-          style={[styles.hourSlot, { top: h * hourHeight, height: hourHeight }]}
-          onPress={() => handlers.onPressSlot(day.date, h)}
-          accessibilityLabel={`Новое событие в ${h}:00`}
-        />
-      ))}
+      {/* Сетка часов; тап по пустому часу — новая запись на этот час. */}
+      {Array.from({ length: 24 - fromHour }, (_, i) => {
+        const h = fromHour + i;
+        return (
+          <Pressable
+            key={h}
+            style={[styles.hourSlot, { top: i * hourHeight, height: hourHeight }]}
+            onPress={() => handlers.onPressSlot(day.date, h)}
+            accessibilityLabel={`Новая запись в ${h}:00`}
+          />
+        );
+      })}
 
       {/* Намазы — несдвигаемые якоря. */}
       {day.prayers.map((p) => {
-        const top = minutesInDay(p.at, day.date) * pxPerMin;
+        const min = minutesInDay(p.at, day.date);
+        if (min < offset) return null;
+        const top = (min - offset) * pxPerMin;
         return (
           <View key={p.label} pointerEvents="none" style={[styles.prayerLine, { top }]}>
             {!compact ? (
@@ -209,7 +262,7 @@ function DayColumn({
 
       {placed.map((p) => {
         const b = byKey.get(p.key)!;
-        const top = p.startMin * pxPerMin;
+        const top = Math.max(0, p.startMin - offset) * pxPerMin;
         const height = Math.max(p.endMin - p.startMin, 20) * pxPerMin - 2;
         const style = { top, height, left: `${(p.col / p.cols) * 100}%` as const, width: `${100 / p.cols}%` as const };
         if (b.kind === 'event') {
@@ -233,6 +286,41 @@ function DayColumn({
             </Pressable>
           );
         }
+        const done = b.task.status === 'done';
+        if (handlers.onToggleTask) {
+          // Кружок «выполнить» — сосед области открытия, а не вложенная кнопка.
+          const onToggle = handlers.onToggleTask;
+          return (
+            <View key={p.key} style={[styles.block, styles.taskBlock, styles.taskBlockRow, style, { borderLeftColor: taskColor(b.task) }]}>
+              <Pressable
+                onPress={() => onToggle(b.task)}
+                hitSlop={8}
+                style={[styles.blockCheck, { borderColor: taskColor(b.task) }, done && styles.blockCheckDone]}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: done }}
+                accessibilityLabel={done ? 'Вернуть в работу' : 'Выполнить'}
+              >
+                {done ? <Text style={styles.blockCheckMark}>✓</Text> : null}
+              </Pressable>
+              <Pressable
+                style={styles.blockBody}
+                onPress={() => handlers.onPressTask(b.task)}
+                accessibilityRole="button"
+                accessibilityLabel={`Задача ${b.task.title}, ${b.task.due?.time}`}
+              >
+                <Text style={[styles.taskBlockTitle, done && styles.doneText]} numberOfLines={2}>
+                  {b.task.title}
+                </Text>
+                {height > 34 ? (
+                  <Text style={styles.blockMeta} numberOfLines={1}>
+                    {b.task.due?.time}
+                    {b.task.durationMinutes ? ` · ${b.task.durationMinutes} мин` : ''}
+                  </Text>
+                ) : null}
+              </Pressable>
+            </View>
+          );
+        }
         return (
           <Pressable
             key={p.key}
@@ -241,15 +329,15 @@ function DayColumn({
             accessibilityRole="button"
             accessibilityLabel={`Задача ${b.task.title}, ${b.task.due?.time}`}
           >
-            <Text style={[styles.taskBlockTitle, b.task.status === 'done' && styles.doneText]} numberOfLines={compact ? 3 : 2}>
-              {b.task.status === 'done' ? '✓ ' : '○ '}
+            <Text style={[styles.taskBlockTitle, done && styles.doneText]} numberOfLines={compact ? 3 : 2}>
+              {done ? '✓ ' : '○ '}
               {b.task.title}
             </Text>
           </Pressable>
         );
       })}
 
-      {isToday ? <View pointerEvents="none" style={[styles.nowLine, { top: nowTop }]} /> : null}
+      {isToday && nowTop >= 0 ? <View pointerEvents="none" style={[styles.nowLine, { top: nowTop }]} /> : null}
     </View>
   );
 }
@@ -345,7 +433,7 @@ export function AgendaView({
         return (
           <View key={d.date} style={styles.agendaDay}>
             <Pressable onPress={() => handlers.onPressDay(d.date)} accessibilityRole="button" style={styles.agendaHeader}>
-              <Text style={[styles.agendaDate, d.date === todayKey && { color: COLORS.primary }]}>
+              <Text style={[styles.agendaDate, d.date === todayKey && styles.agendaDateToday]}>
                 {d.date === todayKey ? 'Сегодня, ' : ''}
                 {dj.format('dd, D MMMM')}
               </Text>
@@ -419,6 +507,11 @@ const styles = StyleSheet.create({
   blockMeta: { fontSize: 11, color: COLORS.muted },
   taskBlock: { backgroundColor: COLORS.hover, borderLeftWidth: 3 },
   taskBlockTitle: { fontSize: 12, color: COLORS.text },
+  taskBlockRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingVertical: 4 },
+  blockCheck: { width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, marginTop: 1, alignItems: 'center', justifyContent: 'center' },
+  blockCheckDone: { backgroundColor: COLORS.success, borderColor: COLORS.success },
+  blockCheckMark: { fontSize: 9, fontWeight: '700', color: COLORS.onAccent, lineHeight: 11 },
+  blockBody: { flex: 1 },
   doneText: { color: COLORS.tertiary, textDecorationLine: 'line-through' },
   nowLine: { position: 'absolute', left: 0, right: 0, height: 1.5, backgroundColor: COLORS.danger },
 
@@ -437,6 +530,8 @@ const styles = StyleSheet.create({
   agendaDay: { marginBottom: 18 },
   agendaHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 },
   agendaDate: { fontSize: 15, fontWeight: '600', color: COLORS.text, textTransform: 'capitalize' },
+  // Сегодня выделяется фоном, а не цветом текста (docs/spec/design.md).
+  agendaDateToday: { backgroundColor: COLORS.hover, borderRadius: 4, paddingHorizontal: 6, overflow: 'hidden' },
   agendaHijri: { fontSize: 11, color: COLORS.muted },
   agendaPrayers: { fontSize: 11, color: PRAYER, marginBottom: 6 },
   agendaItem: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 9, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.separator },

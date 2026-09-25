@@ -19,7 +19,7 @@ import {
   projectPath,
   subtreeHeight,
 } from '../../lib/projects';
-import { plural } from '../../lib/recurrence';
+import { plural } from '../../lib/dates';
 import { TaskCard } from '../../components/TaskCard';
 import { Fab } from '../../components/Fab';
 import { useTaskSheet } from '../../components/TaskSheet';
