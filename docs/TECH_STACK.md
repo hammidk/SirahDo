@@ -37,7 +37,7 @@
 - Линтер: `npx expo lint` (ESLint 9, `eslint-config-expo`, flat config `eslint.config.js`). В правилах есть проверки React Compiler/хуков: ручные `useMemo`, которые компилятор не может сохранить, убирать; `setState` в эффектах и доступ к `ref` при рендере запрещены.
 - Сборка: `npx expo export -p web` — быстрая проверка, что всё бандлится.
 - Совместимость зависимостей: `npx expo-doctor`, исправление — `npx expo install --fix`.
-- Автотестов (Jest и т.п.) **нет**. Чистая логика (`recurrence`, `dates`, `habits`, `filters`, `projects`, `prayerTimes`, `markdown`, `timeline`) проверялась разовыми node-скриптами; UI — в веб-сборке во встроенном браузере.
+- Автотестов (Jest и т.п.) **нет**. Единственная постоянная проверка — миграция данных: `node scripts/check-migration-v5.cjs`. Чистая логика (`recurrence`, `dates`, `habits`, `filters`, `projects`, `prayerTimes`, `markdown`, `timeline`) проверялась разовыми node-скриптами; UI — в веб-сборке во встроенном браузере.
 - Форматтер (Prettier) не подключён.
 
 ## Сборка и поставка

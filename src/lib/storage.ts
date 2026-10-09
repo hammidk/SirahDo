@@ -36,9 +36,10 @@ const KEYS = {
   habitLogs: 'sirahdo:habitLogs',
   diary: 'sirahdo:diary',
   settings: 'sirahdo:settings',
+  backupV4Projects: 'sirahdo:backup:v4:projects', // копия проектов до миграции v5
 };
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
   const raw = await AsyncStorage.getItem(key);
@@ -160,8 +161,9 @@ export const tasks = collection<Task, 'createdAt' | 'status' | 'checklist' | 're
   })
 );
 
-export const projects = collection<Project, 'order'>(KEYS.projects, (all, input) => ({
-  order: nextOrder(all.filter((p) => p.parentProjectId === input.parentProjectId)),
+// С v5 списки плоские: порядок общий для всех, а не внутри родителя.
+export const projects = collection<Project, 'order'>(KEYS.projects, (all) => ({
+  order: nextOrder(all),
 }));
 
 export const sections = collection<Section, 'order'>(KEYS.sections, (all, input) => ({
@@ -224,6 +226,7 @@ export async function migrate(): Promise<void> {
   if (version < 2) await migrateV1toV2();
   if (version < 3) await migrateV2toV3();
   if (version < 4) await migrateV3toV4();
+  if (version < 5) await migrateV4toV5();
   await AsyncStorage.setItem(KEYS.schemaVersion, String(SCHEMA_VERSION));
 }
 
@@ -375,4 +378,86 @@ async function migrateV3toV4(): Promise<void> {
     }))
   );
   await AsyncStorage.removeItem(KEYS.legacyFilters);
+}
+
+// ---------- v5: проекты → плоские списки ----------
+
+/**
+ * Превращает дерево проектов в плоский список (docs/DECISIONS.md, D35). Чистая функция.
+ * - у вложенного проекта название становится путём «Родитель / Дочерний», прежнее
+ *   сохраняется в legacyTitle; parentProjectId остаётся как наследие;
+ * - если в архиве любой предок — проект тоже уходит в архив, иначе скрытое поддерево
+ *   внезапно появилось бы среди списков;
+ * - order перенумеровывается обходом дерева в глубину — порядок как был виден в дереве.
+ * Уже обработанные проекты (есть legacyTitle) не трогаются: повторный вызов ничего не меняет.
+ */
+export function flattenProjectsV5(list: Project[]): Project[] {
+  const byId = new Map(list.map((p) => [p.id, p]));
+  const parentOf = (p: Project) => (p.parentProjectId ? byId.get(p.parentProjectId) : undefined);
+  // Ещё не обработанный вложенный проект: родитель существует, прежнее название не сохранено.
+  const pending = list.filter((p) => parentOf(p) && p.legacyTitle === undefined);
+  if (pending.length === 0) return list;
+  const pendingIds = new Set(pending.map((p) => p.id));
+
+  // Предки от корня к проекту; seen защищает от циклов в повреждённых данных.
+  const ancestors = (p: Project): Project[] => {
+    const out: Project[] = [];
+    const seen = new Set([p.id]);
+    for (let cur = parentOf(p); cur && !seen.has(cur.id); cur = parentOf(cur)) {
+      out.unshift(cur);
+      seen.add(cur.id);
+    }
+    return out;
+  };
+
+  // Порядок обхода в глубину: соседи — по прежнему order, затем по названию.
+  const originalTitle = (p: Project) => p.legacyTitle ?? p.title;
+  const bySiblingOrder = (a: Project, b: Project) =>
+    a.order - b.order || originalTitle(a).localeCompare(originalTitle(b), 'ru');
+  const childrenOf = new Map<string | undefined, Project[]>();
+  for (const p of list) {
+    const key = parentOf(p)?.id;
+    childrenOf.set(key, [...(childrenOf.get(key) ?? []), p]);
+  }
+  const ordered: Project[] = [];
+  const visited = new Set<string>();
+  const walk = (parentId: string | undefined) => {
+    for (const p of [...(childrenOf.get(parentId) ?? [])].sort(bySiblingOrder)) {
+      if (visited.has(p.id)) continue;
+      visited.add(p.id);
+      ordered.push(p);
+      walk(p.id);
+    }
+  };
+  walk(undefined);
+  for (const p of list) if (!visited.has(p.id)) ordered.push(p); // участники цикла — в конец
+  const orderOf = new Map(ordered.map((p, i) => [p.id, i]));
+
+  return list.map((p) => {
+    const next: Project = { ...p, order: orderOf.get(p.id) ?? p.order };
+    if (!pendingIds.has(p.id)) return next;
+    const chain = ancestors(p);
+    next.legacyTitle = p.title;
+    next.title = [...chain.map(originalTitle), p.title].join(' / ');
+    if (chain.some((a) => a.archived)) next.archived = true;
+    return next;
+  });
+}
+
+/**
+ * v5 (docs/ARCHITECTURE.md, «План миграции v4 → v5»; D35, D38): проекты становятся плоскими
+ * списками. Ничего не удаляется: исходная коллекция один раз копируется в backupV4Projects,
+ * остальные данные (разделы, теги, поля задач, дневник) не трогаются — код их просто
+ * не использует.
+ */
+async function migrateV4toV5(): Promise<void> {
+  const raw = await AsyncStorage.getItem(KEYS.projects);
+  if (!raw) return;
+  const list = await readJson<Project[]>(KEYS.projects, []);
+  const flat = flattenProjectsV5(list);
+  if (flat === list) return; // вложенных проектов нет — менять нечего
+  if ((await AsyncStorage.getItem(KEYS.backupV4Projects)) === null) {
+    await AsyncStorage.setItem(KEYS.backupV4Projects, raw);
+  }
+  await writeJson(KEYS.projects, flat);
 }

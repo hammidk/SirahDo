@@ -153,11 +153,15 @@ export interface HabitReminder {
 
 // ---------- Todo ----------
 
-// Проект. "Входящие" не является проектом: задачи без projectId лежат во Входящих.
+// Проект (с v5 в интерфейсе — «Список»). "Входящие" не является проектом: задачи без
+// projectId лежат во Входящих.
+// Схема v5 (docs/ARCHITECTURE.md): ненужные продукту поля и коллекции не удаляются из
+// хранилища, а остаются как «наследие v4» — код их не показывает и не использует.
 export interface Project {
   id: string;
   title: string;
-  parentProjectId?: string; // вложенность папок (UI — до 3 уровней)
+  legacyTitle?: string; // название до v5: при миграции вложенный проект получил в title путь «Родитель / Дочерний»
+  parentProjectId?: string; // наследие v4: вложенность папок
   sphere?: SphereId;
   intentionTag?: IntentionTagId;
   intention?: string; // Намерение — зачем этот проект существует
