@@ -4,7 +4,7 @@
 
 import { useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { Text } from '../../components/themed';
+import { Text } from '../themed';
 import { router } from 'expo-router';
 import dayjs from 'dayjs';
 
@@ -16,21 +16,21 @@ import { DATE_FORMAT, dueMoment, isoWeekday, parseTime, toDateKey } from '../../
 import { useNow } from '../../lib/hooks';
 import { NAMAZ_WINDOW_ORDER } from '../../lib/types';
 import type { Task } from '../../lib/types';
-import { TaskCard } from '../../components/TaskCard';
-import { Fab } from '../../components/Fab';
-import { useTaskSheet } from '../../components/TaskSheet';
-import { CollapsibleSection } from '../../components/Collapsible';
-import { DayTimeline } from '../../components/calendar/CalendarViews';
-import type { ViewHandlers } from '../../components/calendar/CalendarViews';
-import { COLORS } from '../../components/ui';
-import { EventRow, EveningCard, OverdueSection, PrayerCard } from '../../components/today';
+import { TaskCard } from '../TaskCard';
+import { Fab } from '../Fab';
+import { useTaskSheet } from '../TaskSheet';
+import { CollapsibleSection } from '../Collapsible';
+import { DayTimeline } from '../calendar/CalendarViews';
+import type { ViewHandlers } from '../calendar/CalendarViews';
+import { COLORS } from '../ui';
+import { EventRow, EveningCard, OverdueSection, PrayerCard } from '../today';
 
 const HOUR_HEIGHT = 52;
 
 // Порядок в «Без времени»: сначала без окна намаза, затем по окнам дня, внутри — по приоритету.
 const windowRank = (t: Task) => (t.namazWindow ? NAMAZ_WINDOW_ORDER.indexOf(t.namazWindow) + 1 : 0);
 
-export default function TodayScreen() {
+export function TodayPage() {
   const {
     loading,
     tasks,

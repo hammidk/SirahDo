@@ -6,6 +6,9 @@ import type { ReactNode } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
+import { TabPagerGestureContext } from './nav/pagerGesture';
 
 import { COLORS, RADIUS, tagBackground } from '../theme/colors';
 import { Text } from './themed';
@@ -154,18 +157,24 @@ export function Sheet({
   const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      {/* Лист поднимается над клавиатурой, чтобы поля и кнопки оставались видны. */}
-      <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Закрыть" />
-        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
-          <View style={styles.grabber} />
-          {header ?? (title ? <Text style={styles.sheetTitle}>{title}</Text> : null)}
-          <ScrollView style={styles.sheetBody} keyboardShouldPersistTaps="handled">
-            {children}
-          </ScrollView>
-          {footer ? <View style={styles.sheetFooter}>{footer}</View> : null}
-        </View>
-      </KeyboardAvoidingView>
+      {/* Модалка — отдельное окно: жестам (свайп месяцев в пикере) нужен свой корень
+          gesture-handler, а жест листания вкладок сюда не относится. */}
+      <GestureHandlerRootView style={styles.flex}>
+        <TabPagerGestureContext.Provider value={null}>
+          {/* Лист поднимается над клавиатурой, чтобы поля и кнопки оставались видны. */}
+          <KeyboardAvoidingView style={styles.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Закрыть" />
+            <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+              <View style={styles.grabber} />
+              {header ?? (title ? <Text style={styles.sheetTitle}>{title}</Text> : null)}
+              <ScrollView style={styles.sheetBody} keyboardShouldPersistTaps="handled">
+                {children}
+              </ScrollView>
+              {footer ? <View style={styles.sheetFooter}>{footer}</View> : null}
+            </View>
+          </KeyboardAvoidingView>
+        </TabPagerGestureContext.Provider>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -259,6 +268,7 @@ const styles = StyleSheet.create({
   fieldTitle: { width: 104, fontSize: 14, color: COLORS.muted },
   fieldValue: { flex: 1, fontSize: 15, color: COLORS.text },
   fieldPlaceholder: { flex: 1, fontSize: 15, color: COLORS.tertiary },
+  flex: { flex: 1 },
   overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: COLORS.overlay },
   sheet: {
     backgroundColor: COLORS.card,

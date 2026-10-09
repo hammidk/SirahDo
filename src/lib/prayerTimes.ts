@@ -126,6 +126,17 @@ export function prayerDayContext(now: Date, settings: UserSettings): PrayerDayCo
   return { dayKey, windows, yesterdayWindows, current };
 }
 
+/**
+ * Окно намаза, в которое попадает время срока задачи (docs/spec/tasks.md: окно
+ * подставляется по времени). До Фаджра — ночное окно «Иша → Фаджр» прошлых суток.
+ */
+export function namazWindowAt(date: string, time: string, settings: UserSettings): NamazWindowName | undefined {
+  const [h, m] = time.split(':').map(Number);
+  const at = dayjs(date).startOf('day').hour(h).minute(m).toDate();
+  const windows = [...namazWindowsForDate(dayjs(date).subtract(1, 'day').format('YYYY-MM-DD'), settings), ...namazWindowsForDate(date, settings)];
+  return findCurrentWindow(windows, at)?.name;
+}
+
 export interface PrayerStatus {
   /** Намаз, время которого уже наступило; нет — после полуночи до Фаджра. */
   current?: PrayerName;

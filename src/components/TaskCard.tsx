@@ -10,7 +10,7 @@ import type { Task } from '../lib/types';
 import { INTENTION_TAGS, NAMAZ_WINDOW_TITLES, PRIORITIES, SPHERES } from '../lib/types';
 import { formatDue, isOverdue } from '../lib/dates';
 import { stripMarkdown } from '../lib/markdown';
-import { useAppData } from '../lib/AppDataContext';
+import { useAdvancedMode, useAppData } from '../lib/AppDataContext';
 import { COLORS } from '../theme/colors';
 import { Text } from './themed';
 import { Icon } from './Icon';
@@ -38,6 +38,7 @@ export function TaskCard({
   trailing?: React.ReactNode; // доп. действие справа (например, «разобрать» во Входящих)
 }) {
   const { reopenTask, tags, projects } = useAppData();
+  const advanced = useAdvancedMode(); // сфера, тег намерения, Ценность — только в расширенном режиме
   const { openTask, completeWithFeedback } = useTaskSheet();
   const done = task.status === 'done';
   const priority = PRIORITIES.find((p) => p.id === task.priority) ?? PRIORITIES[3];
@@ -99,10 +100,10 @@ export function TaskCard({
           {taskTags.map((t) => (
             <Meta key={t.id} icon="hash" text={t.name} color={t.color ?? COLORS.ai} />
           ))}
-          {intention ? <Meta text={intention.title} color={COLORS.ai} /> : null}
-          {sphere ? <Meta text={sphere.title} /> : null}
+          {advanced && intention ? <Meta text={intention.title} color={COLORS.ai} /> : null}
+          {advanced && sphere ? <Meta text={sphere.title} /> : null}
           {project ? <Meta icon="folder" text={project.title} /> : null}
-          {task.value ? <Meta text={`✦ ${task.value}`} color={COLORS.tertiary} /> : null}
+          {advanced && task.value ? <Meta text={`✦ ${task.value}`} color={COLORS.tertiary} /> : null}
         </View>
       </Pressable>
       {trailing}

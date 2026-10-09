@@ -313,6 +313,7 @@ export type CalculationMethodId =
 export type MadhabId = 'Shafi' | 'Hanafi';
 
 export interface UserSettings {
+  userName?: string; // имя в Профиле; первая буква — на аватаре
   latitude?: number;
   longitude?: number;
   locationLabel?: string; // например "Berlin, DE" — для отображения
@@ -321,11 +322,18 @@ export interface UserSettings {
   hijriOffset?: number; // ручная поправка даты по хиджре, дней (−2…+2)
   calendarView?: CalendarViewMode; // последний выбранный режим Календаря
   showTasksInCalendar?: boolean; // слой «Задачи» в Календаре (по умолчанию включён)
+  // Расширенный режим (docs/spec/modes.md): разделы, Намерение, Упование, Ценность,
+  // фильтры и теги. Выключение только скрывает поля — данные остаются.
+  advancedMode?: boolean;
+  onboardingDone?: boolean; // онбординг первого запуска пройден
 }
 
 export type CalendarViewMode = 'agenda' | 'day' | 'week' | 'month';
 
+// Новые поля настроек добавляются сюда со значением по умолчанию: сохранённые
+// настройки сливаются с DEFAULT_SETTINGS при чтении, миграция не нужна.
 export const DEFAULT_SETTINGS: UserSettings = {
   calculationMethod: 'MuslimWorldLeague',
   madhab: 'Shafi',
+  advancedMode: false,
 };

@@ -45,6 +45,16 @@ async function ensureAndroidChannel() {
   channelReady = true;
 }
 
+export type NotificationStatus = 'granted' | 'denied' | 'undetermined' | 'unsupported';
+
+/** Состояние разрешения на уведомления — для экрана «Уведомления». */
+export async function getNotificationStatus(): Promise<NotificationStatus> {
+  if (!SUPPORTED) return 'unsupported';
+  const current = await Notifications.getPermissionsAsync();
+  if (current.granted) return 'granted';
+  return current.canAskAgain ? 'undetermined' : 'denied';
+}
+
 export async function ensureNotificationPermission(): Promise<boolean> {
   if (!SUPPORTED) return false;
   const current = await Notifications.getPermissionsAsync();

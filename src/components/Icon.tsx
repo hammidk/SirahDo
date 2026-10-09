@@ -50,6 +50,10 @@ import {
   X,
   Bell,
   Hash,
+  House,
+  User,
+  CircleQuestionMark,
+  Compass,
   ListChecks,
   Moon,
 } from 'lucide-react-native';
@@ -59,6 +63,7 @@ import { COLORS } from '../theme/colors';
 
 const ICONS = {
   // навигация
+  home: House,
   today: Sun,
   calendar: Calendar,
   'calendar-day': CalendarDays,
@@ -111,6 +116,9 @@ const ICONS = {
   grid: LayoutGrid,
   circle: Circle,
   moon: Moon,
+  user: User,
+  help: CircleQuestionMark,
+  compass: Compass,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

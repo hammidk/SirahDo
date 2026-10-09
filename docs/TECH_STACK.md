@@ -9,7 +9,7 @@
 |---|---|---|
 | Платформа | **Expo SDK 57** (`expo ~57.0.25`), React Native 0.86, React 19.2 | Один код для iOS/Android/web; проверка на телефоне через **Expo Go** |
 | Язык | TypeScript ~6.0, `strict: true` | Весь код в `src/` — `.ts/.tsx` |
-| Навигация | **Expo Router** (файловые маршруты в `src/app/`) | Stack (корень) + Tabs (4 вкладки); модалки — `presentation: 'modal'` |
+| Навигация | **Expo Router** (файловые маршруты в `src/app/`) | Stack (корень); главный экран — своя оболочка с верхней панелью и пейджером вкладок (не Tabs); модалки — `presentation: 'modal'` |
 | Хранилище | `@react-native-async-storage/async-storage` **2.2.0** | Единственное хранилище данных, только на устройстве. Версия закреплена под Expo Go SDK 57 (3.x там не работает) |
 | Состояние | React Context (`AppDataContext`) | Единая точка правды для экранов; без Redux/Zustand |
 | Backend / БД / авторизация | **нет** | Облачная синхронизация — вне MVP (`src/lib/firebase.ts` — заглушка с планом) |
@@ -24,10 +24,11 @@
 | `expo-location` | GPS, обратный геокодинг (подпись места), геокодинг города (только iOS/Android) |
 | `lucide-react-native` + `react-native-svg` | Line-иконки интерфейса (оба пакета есть в Expo Go) |
 | `expo-splash-screen` | Заставка; держится, пока грузятся данные |
-| `react-native-reanimated` 4.5.1 + `react-native-worklets` 0.10.1 | Не используются напрямую (транзитивно нужны expo-router); **закреплены версиями SDK 57**, иначе npm тянет несовместимые и `npm ci` на EAS падает |
+| `react-native-gesture-handler` ~2.32 | Жесты: свайп вкладок, листание дат, закрытие меню свайпом. Версия SDK 57 (в Expo Go); без явной зависимости npm ставил 3.x как peer expo-router — несовместимо с Expo Go |
+| `react-native-reanimated` 4.5.1 + `react-native-worklets` 0.10.1 | Анимации жестов и таблеток (worklets, `scheduleOnRN`); плагин Babel подключает `babel-preset-expo`. **Закреплены версиями SDK 57**, иначе npm тянет несовместимые и `npm ci` на EAS падает |
 | `expo-font`, `expo-linking`, `expo-constants`, `expo-status-bar`, `react-native-screens`, `react-native-safe-area-context`, `react-native-web`/`react-dom` | Стандартная обвязка Expo / веб-сборка |
 
-Собственные компоненты вместо библиотек: пикеры даты/времени, сетки календаря, markdown-редактор (без WebView), нижние листы, свайп-листание периодов и сворачиваемые секции (встроенные `PanResponder` + `Animated`).
+Собственные компоненты вместо библиотек: пикеры даты/времени, сетки календаря, markdown-редактор (без WebView), нижние листы, сворачиваемые секции (`Animated`), пейджер вкладок и свайп-листание периодов (gesture-handler + Reanimated).
 Правило: новые нативные зависимости — только из состава Expo Go, иначе нужен dev build (предупреждать пользователя).
 
 ## Качество

@@ -5,9 +5,9 @@
 
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Text } from '../../components/themed';
-import { Tabs, router } from 'expo-router';
-import { Icon } from '../../components/Icon';
+import { Text } from '../themed';
+import { router } from 'expo-router';
+import { Icon } from '../Icon';
 import dayjs from 'dayjs';
 
 import { useAppData } from '../../lib/AppDataContext';
@@ -15,18 +15,18 @@ import type { CalendarViewMode } from '../../lib/types';
 import { collectDay, dateRange } from '../../lib/calendarData';
 import { DATE_FORMAT, startOfIsoWeek, todayKey } from '../../lib/dates';
 import { useNow } from '../../lib/hooks';
-import { Fab } from '../../components/Fab';
-import { useTaskSheet } from '../../components/TaskSheet';
-import { CalendarGrid } from '../../components/CalendarGrid';
-import { SwipePager } from '../../components/SwipePager';
-import { CalendarDrawer } from '../../components/calendar/CalendarDrawer';
-import { AgendaView, MonthView, TimelineView } from '../../components/calendar/CalendarViews';
-import type { ViewHandlers } from '../../components/calendar/CalendarViews';
-import { COLORS } from '../../components/ui';
+import { Fab } from '../Fab';
+import { useTaskSheet } from '../TaskSheet';
+import { CalendarGrid } from '../CalendarGrid';
+import { SwipePager } from '../SwipePager';
+import { CalendarDrawer } from '../calendar/CalendarDrawer';
+import { AgendaView, MonthView, TimelineView } from '../calendar/CalendarViews';
+import type { ViewHandlers } from '../calendar/CalendarViews';
+import { COLORS } from '../ui';
 
 const AGENDA_DAYS = 30;
 
-export default function CalendarScreen() {
+export function CalendarPage() {
   const { tasks, events, calendars, settings, updateSettings } = useAppData();
   const { openTask } = useTaskSheet();
   const now = useNow(60_000);
@@ -89,40 +89,33 @@ export default function CalendarScreen() {
 
   return (
     <View style={styles.screen}>
-      <Tabs.Screen
-        options={{
-          headerTitle: () => (
-            <Pressable
-              onPress={() => setPickerOpen((v) => !v)}
-              style={styles.titleButton}
-              accessibilityRole="button"
-              accessibilityLabel={`${title}. Открыть календарь для перехода к дате`}
-            >
-              <Text style={styles.title}>{title}</Text>
-              <Icon name={pickerOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.muted} />
-            </Pressable>
-          ),
-          headerLeft: () => (
-            <Pressable onPress={() => setDrawerOpen(true)} hitSlop={10} style={styles.headerButton} accessibilityRole="button" accessibilityLabel="Вид и календари">
-              <Icon name="menu" size={22} color={COLORS.muted} />
-            </Pressable>
-          ),
-          headerRight: () => (
-            <Pressable
-              onPress={() => {
-                setSelected(todayKey());
-                setPickerOpen(false);
-              }}
-              hitSlop={10}
-              style={styles.headerButton}
-              accessibilityRole="button"
-              accessibilityLabel="Перейти к сегодня"
-            >
-              <Text style={[styles.todayButton, selected === todayKey() && styles.todayButtonCurrent]}>Сегодня</Text>
-            </Pressable>
-          ),
-        }}
-      />
+      {/* Шапка страницы (вкладки — в верхней панели приложения): панель, период, «Сегодня». */}
+      <View style={styles.header}>
+        <Pressable onPress={() => setDrawerOpen(true)} hitSlop={10} style={styles.headerButton} accessibilityRole="button" accessibilityLabel="Вид и календари">
+          <Icon name="menu" size={22} color={COLORS.muted} />
+        </Pressable>
+        <Pressable
+          onPress={() => setPickerOpen((v) => !v)}
+          style={styles.titleButton}
+          accessibilityRole="button"
+          accessibilityLabel={`${title}. Открыть календарь для перехода к дате`}
+        >
+          <Text style={styles.title}>{title}</Text>
+          <Icon name={pickerOpen ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.muted} />
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            setSelected(todayKey());
+            setPickerOpen(false);
+          }}
+          hitSlop={10}
+          style={styles.headerButton}
+          accessibilityRole="button"
+          accessibilityLabel="Перейти к сегодня"
+        >
+          <Text style={[styles.todayButton, selected === todayKey() && styles.todayButtonCurrent]}>Сегодня</Text>
+        </Pressable>
+      </View>
 
       {pickerOpen ? (
         <View style={styles.picker}>
@@ -170,7 +163,8 @@ export default function CalendarScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.background },
-  titleButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  titleButton: { flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1 },
   title: { fontSize: 17, fontWeight: '600', color: COLORS.text, textTransform: 'capitalize' },
   headerButton: { paddingHorizontal: 16 },
   // «Сегодня» — обычный текст на фоне-плашке, без синего (docs/spec/design.md).

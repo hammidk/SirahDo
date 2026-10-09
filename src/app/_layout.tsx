@@ -1,14 +1,16 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StatusBar } from 'expo-status-bar';
 
 import { AppDataProvider, useAppData } from '../lib/AppDataContext';
 import { addNotificationTapListener } from '../lib/notifications';
 import { TaskSheetProvider } from '../components/TaskSheet';
+import { Onboarding } from '../components/Onboarding';
 import { COLORS } from '../theme/colors';
 import { headerOptions } from '../theme/navigation';
 
@@ -16,10 +18,16 @@ import { headerOptions } from '../theme/navigation';
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 function LoadingGate({ children }: { children: ReactNode }) {
-  const { loading } = useAppData();
+  const { loading, settings } = useAppData();
+  // Онбординг — только при первом запуске: решение принимается один раз после загрузки,
+  // чтобы выбор города на шаге 2 не закрыл онбординг раньше шага 3.
+  const [onboarding, setOnboarding] = useState<boolean | null>(null);
+  if (!loading && onboarding === null) setOnboarding(!settings.onboardingDone && settings.latitude == null);
+
   useEffect(() => {
     if (!loading) SplashScreen.hideAsync().catch(() => undefined);
   }, [loading]);
+  if (onboarding && !settings.onboardingDone) return <Onboarding />;
   if (loading) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.background }}>
@@ -35,47 +43,52 @@ export default function RootLayout() {
   useEffect(() => addNotificationTapListener((url) => router.push(url as never)), []);
 
   return (
-    <SafeAreaProvider>
-      <AppDataProvider>
-        <LoadingGate>
-          <TaskSheetProvider>
-            <StatusBar style="light" />
-            <Stack
-              screenOptions={{
-                ...headerOptions,
-                headerBackButtonDisplayMode: 'minimal',
-                contentStyle: { backgroundColor: COLORS.background },
-              }}
-            >
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="task/[id]"
-                options={{ presentation: 'modal', title: 'Задача' }}
-              />
-              <Stack.Screen
-                name="project/[id]"
-                options={{ title: 'Проект' }}
-              />
-              <Stack.Screen
-                name="inbox"
-                options={{ title: 'Входящие' }}
-              />
-              <Stack.Screen name="profile" options={{ title: 'Профиль' }} />
-              <Stack.Screen name="diary/index" options={{ title: 'Дневник' }} />
-              <Stack.Screen name="diary/[date]" options={{ title: 'Дневник' }} />
-              <Stack.Screen name="history/index" options={{ title: 'История' }} />
-              <Stack.Screen name="history/[date]" options={{ title: 'День' }} />
-              <Stack.Screen name="tag/[id]" options={{ title: 'Тег' }} />
-              <Stack.Screen name="filters-tags" options={{ title: 'Фильтры и теги' }} />
-              <Stack.Screen name="filter/[id]" options={{ title: 'Фильтр' }} />
-              <Stack.Screen name="archive" options={{ title: 'Архив проектов' }} />
-              <Stack.Screen name="event/[id]" options={{ presentation: 'modal', title: 'Событие' }} />
-              <Stack.Screen name="habit/[id]" options={{ presentation: 'modal', title: 'Привычка' }} />
-              <Stack.Screen name="habit/stats" options={{ title: 'Статистика привычек' }} />
-            </Stack>
-          </TaskSheetProvider>
-        </LoadingGate>
-      </AppDataProvider>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppDataProvider>
+          <LoadingGate>
+            <TaskSheetProvider>
+              <StatusBar style="light" />
+              <Stack
+                screenOptions={{
+                  ...headerOptions,
+                  headerBackButtonDisplayMode: 'minimal',
+                  contentStyle: { backgroundColor: COLORS.background },
+                }}
+              >
+                <Stack.Screen name="index" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="task/[id]"
+                  options={{ presentation: 'modal', title: 'Задача' }}
+                />
+                <Stack.Screen
+                  name="project/[id]"
+                  options={{ title: 'Проект' }}
+                />
+                <Stack.Screen
+                  name="inbox"
+                  options={{ title: 'Входящие' }}
+                />
+                <Stack.Screen name="profile" options={{ title: 'Профиль' }} />
+                <Stack.Screen name="prayer-settings" options={{ title: 'Настройки намаза' }} />
+                <Stack.Screen name="notifications" options={{ title: 'Уведомления' }} />
+                <Stack.Screen name="help" options={{ title: 'Помощь' }} />
+                <Stack.Screen name="diary/index" options={{ title: 'Дневник' }} />
+                <Stack.Screen name="diary/[date]" options={{ title: 'Дневник' }} />
+                <Stack.Screen name="history/index" options={{ title: 'История' }} />
+                <Stack.Screen name="history/[date]" options={{ title: 'День' }} />
+                <Stack.Screen name="tag/[id]" options={{ title: 'Тег' }} />
+                <Stack.Screen name="filters-tags" options={{ title: 'Фильтры и теги' }} />
+                <Stack.Screen name="filter/[id]" options={{ title: 'Фильтр' }} />
+                <Stack.Screen name="archive" options={{ title: 'Архив проектов' }} />
+                <Stack.Screen name="event/[id]" options={{ presentation: 'modal', title: 'Событие' }} />
+                <Stack.Screen name="habit/[id]" options={{ presentation: 'modal', title: 'Привычка' }} />
+                <Stack.Screen name="habit/stats" options={{ title: 'Статистика привычек' }} />
+              </Stack>
+            </TaskSheetProvider>
+          </LoadingGate>
+        </AppDataProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

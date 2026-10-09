@@ -32,6 +32,7 @@ import type {
 import { DEFAULT_SETTINGS } from './types';
 import * as storage from './storage';
 import { nextOccurrenceAfter } from './recurrence';
+import { namazWindowAt } from './prayerTimes';
 import {
   cancelNotificationsFor,
   resyncAllNotifications,
@@ -106,7 +107,10 @@ interface AppDataContextValue {
   removeDiaryEntry: (date: string) => Promise<void>;
 
   updateSettings: (settings: UserSettings) => Promise<void>;
-  requestLocation: () => Promise<void>;
+  /** Запросить GPS и сохранить координаты; true — если получилось. */
+  requestLocation: () => Promise<boolean>;
+  /** Пересобрать все локальные напоминания (например, после выдачи разрешения). */
+  resyncNotifications: () => void;
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null);
@@ -184,8 +188,8 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        setLocationError('Доступ к геолокации не выдан. Город можно выбрать вручную в Профиле.');
-        return;
+        setLocationError('Доступ к геолокации не выдан. Город можно выбрать вручную.');
+        return false;
       }
       const pos = await Location.getCurrentPositionAsync({});
       // Подпись места («Казань, Россия») — по возможности; без неё всё работает.
@@ -204,8 +208,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       };
       await storage.saveSettings(next);
       setSettings(next);
+      return true;
     } catch {
       setLocationError('Не удалось определить местоположение.');
+      return false;
     }
   }, []);
 
@@ -220,10 +226,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      let loaded: UserSettings = DEFAULT_SETTINGS;
       try {
         await storage.migrate();
-        loaded = await refresh();
+        await refresh();
         resyncNotifications();
       } catch (e) {
         // Хранилище недоступно — показываем пустое приложение, а не вечную загрузку.
@@ -231,8 +236,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       } finally {
         setLoading(false);
       }
-      // Локация ещё не задана — сразу предлагаем определить её для времён намаза.
-      if (loaded.latitude == null) requestLocation();
+      // Местоположение при первом запуске спрашивает онбординг (components/Onboarding.tsx).
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -255,6 +259,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         const from = prev.postponedFrom ?? [];
         input = { ...input, postponedFrom: from.includes(prev.due.date) ? from : [...from, prev.due.date] };
       }
+    }
+    // Окно намаза подставляется по времени срока, если время указано (docs/spec/tasks.md).
+    if (input.due?.time) {
+      const byTime = namazWindowAt(input.due.date, input.due.time, latest.current.settings);
+      if (byTime) input = { ...input, namazWindow: byTime };
     }
     let saved = await storage.tasks.upsert(input);
     // Повтор без срока не имеет смысла, раздел — без проекта.
@@ -538,12 +547,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     removeDiaryEntry,
     updateSettings,
     requestLocation,
+    resyncNotifications,
   }), [
     loading, tasks, projects, sections, tags, calendars, events, habits, habitLogs, diary,
     settings, locationError, refresh, addOrUpdateTask, completeTask, undoCompleteTask, reopenTask, startTask, removeTask,
     addOrUpdateProject, removeProject, addOrUpdateSection, removeSection, addOrUpdateTag, removeTag,
     addOrUpdateCalendar, removeCalendar, addOrUpdateEvent, removeEvent,
-    addOrUpdateHabit, removeHabit, setHabitCount, saveDiaryEntry, removeDiaryEntry, updateSettings, requestLocation,
+    addOrUpdateHabit, removeHabit, setHabitCount, saveDiaryEntry, removeDiaryEntry, updateSettings, requestLocation, resyncNotifications,
   ]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
@@ -553,4 +563,12 @@ export function useAppData(): AppDataContextValue {
   const ctx = useContext(AppDataContext);
   if (!ctx) throw new Error('useAppData must be used within AppDataProvider');
   return ctx;
+}
+
+/**
+ * Расширенный режим (docs/spec/modes.md). Единственная точка проверки: компоненты
+ * не читают settings.advancedMode напрямую.
+ */
+export function useAdvancedMode(): boolean {
+  return useAppData().settings.advancedMode === true;
 }

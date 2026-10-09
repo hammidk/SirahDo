@@ -250,7 +250,7 @@ function DayColumn({
         if (min < offset) return null;
         const top = (min - offset) * pxPerMin;
         return (
-          <View key={p.label} pointerEvents="none" style={[styles.prayerLine, { top }]}>
+          <View key={p.label} style={[styles.prayerLine, { top }]}>
             {!compact ? (
               <Text style={styles.prayerLabel}>
                 {p.label} {p.at.format('HH:mm')}
@@ -337,7 +337,7 @@ function DayColumn({
         );
       })}
 
-      {isToday && nowTop >= 0 ? <View pointerEvents="none" style={[styles.nowLine, { top: nowTop }]} /> : null}
+      {isToday && nowTop >= 0 ? <View style={[styles.nowLine, { top: nowTop }]} /> : null}
     </View>
   );
 }
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
   dayColumn: { flex: 1, borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: COLORS.separator },
   dayColumnCompact: {},
   hourSlot: { position: 'absolute', left: 0, right: 0, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: COLORS.subtle },
-  prayerLine: { position: 'absolute', left: 0, right: 0, height: 0, borderTopWidth: 1, borderTopColor: withAlpha(PRAYER, 0.7) },
+  prayerLine: { position: 'absolute', left: 0, right: 0, height: 0, pointerEvents: 'none', borderTopWidth: 1, borderTopColor: withAlpha(PRAYER, 0.7) },
   prayerLabel: {
     position: 'absolute',
     right: 4,
@@ -513,7 +513,7 @@ const styles = StyleSheet.create({
   blockCheckMark: { fontSize: 9, fontWeight: '700', color: COLORS.onAccent, lineHeight: 11 },
   blockBody: { flex: 1 },
   doneText: { color: COLORS.tertiary, textDecorationLine: 'line-through' },
-  nowLine: { position: 'absolute', left: 0, right: 0, height: 1.5, backgroundColor: COLORS.danger },
+  nowLine: { position: 'absolute', left: 0, right: 0, height: 1.5, pointerEvents: 'none', backgroundColor: COLORS.danger },
 
   monthDowRow: { flexDirection: 'row', paddingVertical: 6 },
   monthDow: { flex: 1, textAlign: 'center', fontSize: 11, color: COLORS.muted },

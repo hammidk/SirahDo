@@ -1,32 +1,33 @@
 // Горизонтальный свайп для перелистывания периода (день / неделя / месяц): контент
 // едет за пальцем, при достаточном сдвиге уезжает, а новый период въезжает с
-// другой стороны. Встроенные PanResponder + Animated — без нативных зависимостей,
-// работает в Expo Go и на вебе (мышью). Вертикальная прокрутка внутри не мешает:
-// жест забираем, только когда движение явно горизонтальное.
+// другой стороны. react-native-gesture-handler + Reanimated (оба есть в Expo Go).
+// Приоритет жестов (docs/spec/navigation.md): внутри этой области свайп листает
+// даты — жест листания вкладок ждёт, пока этот не откажется (blocksExternalGesture).
 
-import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
-import { Animated, Easing, PanResponder, Platform, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode, RefObject } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { Easing, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
-const START_DISTANCE = 12; // px до того, как считаем движение жестом
+import { useTabPagerGesture } from './nav/pagerGesture';
+
+const START_DISTANCE = 12; // px до того, как считаем движение горизонтальным жестом
 const SWIPE_RATIO = 0.22; // доля ширины, после которой листаем
-const SWIPE_VELOCITY = 0.45; // или достаточно быстрый рывок
+const SWIPE_VELOCITY = 500; // или достаточно быстрый рывок, px/с
 
-// Актуальные колбэки и ширина для обработчиков жеста, созданных один раз
-// (изменяемый объект, а не ref: обработчики читают его только во время жеста).
-class GestureTargets {
-  width = 320;
-  setWidth(w: number) {
-    if (w > 0) this.width = w;
-  }
+// Актуальные колбэки для жеста, созданного один раз (изменяемый объект, а не ref:
+// читается только во время жеста).
+class SwipeTargets {
   private prev: () => void = () => {};
   private next: () => void = () => {};
   update(onPrev: () => void, onNext: () => void) {
     this.prev = onPrev;
     this.next = onNext;
   }
-  go(dir: 1 | -1) {
+  go(dir: number) {
     if (dir === 1) this.next();
     else this.prev();
   }
@@ -39,27 +40,8 @@ type WebNode = {
   removeEventListener: (type: string, handler: (e: WebPointer) => void, capture: boolean) => void;
 };
 
-export function SwipePager({
-  onPrev,
-  onNext,
-  children,
-  style,
-}: {
-  onPrev: () => void;
-  onNext: () => void;
-  children: ReactNode;
-  style?: StyleProp<ViewStyle>;
-}) {
-  const [tx] = useState(() => new Animated.Value(0));
-  const [targets] = useState(() => new GestureTargets());
-  useEffect(() => {
-    targets.update(onPrev, onNext);
-  });
-
-  // Веб: onPress в react-native-web срабатывает от системного click, даже если
-  // мышь перетаскивали. После горизонтального перетаскивания гасим этот click,
-  // чтобы свайп не открывал, например, новое событие по часу под курсором.
-  const hostRef = useRef<View>(null);
+/** Веб: onPress в react-native-web срабатывает от системного click даже после перетаскивания — гасим его. */
+export function useWebDragClickGuard(hostRef: RefObject<View | null>) {
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     const node = hostRef.current as unknown as WebNode | null;
@@ -80,54 +62,75 @@ export function SwipePager({
       node.removeEventListener('mousedown', onDown, true);
       node.removeEventListener('click', onClick, true);
     };
-  }, []);
+  }, [hostRef]);
+}
 
-  const [responder] = useState(() => {
-    const isHorizontal = (dx: number, dy: number) => Math.abs(dx) > START_DISTANCE && Math.abs(dx) > Math.abs(dy) * 1.5;
-    const settle = () =>
-      Animated.spring(tx, { toValue: 0, useNativeDriver: true, bounciness: 0, speed: 18 }).start();
+export function SwipePager({
+  onPrev,
+  onNext,
+  children,
+  style,
+}: {
+  onPrev: () => void;
+  onNext: () => void;
+  children: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const tabPager = useTabPagerGesture();
+  const tx = useSharedValue(0);
+  const width = useSharedValue(320);
+  const [targets] = useState(() => new SwipeTargets());
+  useEffect(() => {
+    targets.update(onPrev, onNext);
+  });
 
-    return PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_, g) => isHorizontal(g.dx, g.dy),
-      onMoveShouldSetPanResponder: (_, g) => isHorizontal(g.dx, g.dy),
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderMove: (_, g) => tx.setValue(g.dx),
-      onPanResponderRelease: (_, g) => {
-        const { width } = targets;
-        const passed = Math.abs(g.dx) > width * SWIPE_RATIO || Math.abs(g.vx) > SWIPE_VELOCITY;
-        if (!passed || g.dx === 0) {
-          settle();
+  const hostRef = useRef<View>(null);
+  useWebDragClickGuard(hostRef);
+
+  const gesture = useMemo(() => {
+    const go = (dir: number) => targets.go(dir);
+    const pan = Gesture.Pan()
+      .activeOffsetX([-START_DISTANCE, START_DISTANCE])
+      .failOffsetY([-START_DISTANCE, START_DISTANCE])
+      .onUpdate((e) => {
+        tx.set(e.translationX);
+      })
+      .onEnd((e) => {
+        const w = width.get();
+        const passed = Math.abs(e.translationX) > w * SWIPE_RATIO || Math.abs(e.velocityX) > SWIPE_VELOCITY;
+        if (!passed || e.translationX === 0) {
+          tx.set(withSpring(0, { damping: 20, stiffness: 220 }));
           return;
         }
-        const dir: 1 | -1 = g.dx < 0 ? 1 : -1; // влево — следующий период
-        Animated.timing(tx, {
-          toValue: -dir * width,
-          duration: 160,
-          easing: Easing.in(Easing.quad),
-          useNativeDriver: true,
-        }).start(() => {
-          targets.go(dir);
-          // Новый период въезжает с противоположной стороны.
-          tx.setValue(dir * width * 0.35);
-          Animated.timing(tx, { toValue: 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-        });
-      },
-      onPanResponderTerminate: settle,
-    });
-  });
+        const dir = e.translationX < 0 ? 1 : -1; // влево — следующий период
+        tx.set(
+          withTiming(-dir * w, { duration: 160, easing: Easing.in(Easing.quad) }, (finished) => {
+            if (!finished) return;
+            scheduleOnRN(go, dir);
+            // Новый период въезжает с противоположной стороны.
+            tx.set(dir * w * 0.35);
+            tx.set(withTiming(0, { duration: 200, easing: Easing.out(Easing.cubic) }));
+          })
+        );
+      });
+    return tabPager ? pan.blocksExternalGesture(tabPager) : pan;
+  }, [tabPager, targets, tx, width]);
+
+  const animated = useAnimatedStyle(() => ({ transform: [{ translateX: tx.get() }] }));
 
   // Внешний слой неподвижен (ловит жест и обрезает края), внутренний — едет.
   return (
-    <View
-      ref={hostRef}
-      style={[styles.pager, style]}
-      onLayout={(e) => {
-        targets.setWidth(e.nativeEvent.layout.width);
-      }}
-      {...responder.panHandlers}
-    >
-      <Animated.View style={[styles.content, { transform: [{ translateX: tx }] }]}>{children}</Animated.View>
-    </View>
+    <GestureDetector gesture={gesture}>
+      <View
+        ref={hostRef}
+        style={[styles.pager, style]}
+        onLayout={(e) => {
+          if (e.nativeEvent.layout.width > 0) width.set(e.nativeEvent.layout.width);
+        }}
+      >
+        <Animated.View style={[styles.content, animated]}>{children}</Animated.View>
+      </View>
+    </GestureDetector>
   );
 }
 

@@ -1,32 +1,33 @@
-// «Обзор» (docs/spec/overview.md): поиск сверху; Входящие, Дневник, История; блок
-// «Фильтры и теги» (отдельный экран); Избранное (проекты, теги); дерево
-// проектов-папок (до 3 уровней). Все строки выровнены по одной сетке.
+// «Проекты» (docs/spec/overview.md): поиск сверху; Входящие, Дневник, История; блок
+// «Фильтры и теги» (отдельный экран, только в расширенном режиме); Избранное
+// (проекты, теги); дерево проектов-папок (до 3 уровней). Строки — на одной сетке.
 
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Text, TextInput } from '../../components/themed';
+import { Text, TextInput } from '../themed';
 import { router } from 'expo-router';
-import { Icon } from '../../components/Icon';
+import { Icon } from '../Icon';
 
-import { useAppData } from '../../lib/AppDataContext';
+import { useAdvancedMode, useAppData } from '../../lib/AppDataContext';
 import { buildProjectTree, flattenTree, projectPath } from '../../lib/projects';
 import type { Project, Tag, Task } from '../../lib/types';
-import { Fab } from '../../components/Fab';
-import { useTaskSheet } from '../../components/TaskSheet';
-import { TaskCard } from '../../components/TaskCard';
-import { NavGroup, NavRow, NavSeparator } from '../../components/NavList';
-import { COLORS } from '../../components/ui';
-import { NewProjectSheet } from '../../components/ProjectSheets';
+import { Fab } from '../Fab';
+import { useTaskSheet } from '../TaskSheet';
+import { TaskCard } from '../TaskCard';
+import { NavGroup, NavRow, NavSeparator } from '../NavList';
+import { COLORS } from '../ui';
+import { NewProjectSheet } from '../ProjectSheets';
 
 const SEARCH_TASK_LIMIT = 50;
 const normalize = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
 
-export default function OverviewScreen() {
+export function ProjectsPage() {
   const { projects, tasks, tags, addOrUpdateProject } = useAppData();
   const { openTask } = useTaskSheet();
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const advanced = useAdvancedMode();
 
   const activeTasks = useMemo(() => tasks.filter((t) => t.status === 'active'), [tasks]);
   const inboxCount = activeTasks.filter((t) => !t.projectId).length;
@@ -107,9 +108,11 @@ export default function OverviewScreen() {
               <NavRow icon="history" title="История" onPress={() => router.push('/history')} />
             </NavGroup>
 
-            <NavGroup>
-              <NavRow icon="filter" title="Фильтры и теги" onPress={() => router.push('/filters-tags')} />
-            </NavGroup>
+            {advanced ? (
+              <NavGroup>
+                <NavRow icon="filter" title="Фильтры и теги" onPress={() => router.push('/filters-tags')} />
+              </NavGroup>
+            ) : null}
 
             {favProjects.length + favTags.length > 0 ? (
               <>

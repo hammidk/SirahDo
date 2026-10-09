@@ -42,7 +42,9 @@
 - Экраны работают с данными только через `useAppData()` (`src/lib/AppDataContext.tsx`). Новая сущность/операция: `storage.ts` → `AppDataContext.tsx` → экран.
 - Цвета — только токены из `src/theme/colors.ts`. `Text`/`TextInput`/`Switch` — из `src/components/themed.tsx`, не из `react-native`. Иконки — `src/components/Icon.tsx` (Lucide). Без теней, радиус ≤ 8.
 - Новые нативные зависимости — только если они есть в Expo Go; иначе предупредить пользователя (нужен dev build). Пакеты ставить `npx expo install`.
-- Изменение формата хранимых данных — через миграцию (`SCHEMA_VERSION` в `storage.ts`).
+- Изменение формата хранимых данных — через миграцию (`SCHEMA_VERSION` в `storage.ts`); новое поле настроек — через значение в `DEFAULT_SETTINGS`.
+- Продвинутые поля показываются только при `useAdvancedMode()` (docs/spec/modes.md); прямых проверок `settings.advancedMode` в компонентах нет.
+- Жесты — `react-native-gesture-handler` + Reanimated (`.get()`/`.set()`). Горизонтальное листание внутри вкладки — только через `SwipePager` (он блокирует свайп вкладок); модалкам с жестами нужен свой `GestureHandlerRootView` (как в `Sheet`).
 - Перед тем как считать задачу готовой: `npx tsc --noEmit`, `npx expo lint`, `npx expo export -p web` (и `npx expo-doctor` при изменении зависимостей) — без ошибок.
 
 ## Особенности окружения (актуально на Mac пользователя)

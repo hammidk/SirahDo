@@ -4,8 +4,8 @@ import { Text, TextInput } from '../../components/themed';
 import { router, useLocalSearchParams } from 'expo-router';
 import dayjs from 'dayjs';
 
-import { useAppData } from '../../lib/AppDataContext';
-import { DEFAULT_PRIORITY, NAMAZ_WINDOW_ORDER } from '../../lib/types';
+import { useAdvancedMode, useAppData } from '../../lib/AppDataContext';
+import { DEFAULT_PRIORITY, NAMAZ_WINDOW_ORDER, NAMAZ_WINDOW_TITLES } from '../../lib/types';
 import type {
   ChecklistItem,
   IntentionTagId,
@@ -16,7 +16,7 @@ import type {
   SphereId,
   TaskDue,
 } from '../../lib/types';
-import { namazWindowsForDate } from '../../lib/prayerTimes';
+import { namazWindowAt, namazWindowsForDate } from '../../lib/prayerTimes';
 import { todayKey } from '../../lib/dates';
 import { projectPath } from '../../lib/projects';
 import { DueField } from '../../components/DueField';
@@ -98,6 +98,22 @@ export default function TaskDetailScreen() {
     [due?.date, settings]
   );
 
+  // Окно по времени срока (подставляется при сохранении, см. AppDataContext.addOrUpdateTask).
+  const windowByTime = due?.time ? namazWindowAt(due.date, due.time, settings) : undefined;
+
+  // «Ещё»: что из спрятанного уже заполнено — подсказка рядом с кнопкой.
+  const advanced = useAdvancedMode();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const showMore = advanced || moreOpen;
+  const filledMore = [
+    description.trim() ? 'описание' : null,
+    checklist.length ? 'чек-лист' : null,
+    recurrence ? 'повтор' : null,
+    priority !== DEFAULT_PRIORITY ? 'приоритет' : null,
+    tagIds.length ? 'теги' : null,
+    duration ? 'длительность' : null,
+  ].filter((x): x is string => !!x);
+
   // Перенос: срок существующей задачи сдвинули на более позднюю дату.
   const postponed = !!existing?.due && !!due && due.date > existing.due.date;
 
@@ -162,27 +178,7 @@ export default function TaskDetailScreen() {
         autoFocus={isNew}
         multiline
       />
-      <MarkdownEditor value={description} onChange={setDescription} />
-
-      {existing && existing.status === 'active' ? (
-        <Pressable
-          style={styles.startRow}
-          onPress={() => startTask(existing.id)}
-          accessibilityRole="button"
-          accessibilityHint="Отметить время начала работы над задачей"
-        >
-          <Text style={styles.startIcon}>{existing.startedAt ? '⏳' : '▶'}</Text>
-          <Text style={styles.startText}>
-            {existing.startedAt
-              ? `Начато ${dayjs(existing.startedAt).format('D MMM, HH:mm')} · нажмите, чтобы начать заново`
-              : 'Начать — отметить время начала'}
-          </Text>
-        </Pressable>
-      ) : null}
-
-      <FieldLabel>Чек-лист</FieldLabel>
-      <ChecklistEditor value={checklist} onChange={setChecklist} />
-
+      {/* Основные поля видны всегда (docs/spec/modes.md). */}
       <FieldLabel>Срок</FieldLabel>
       <DueField
         value={due}
@@ -191,27 +187,18 @@ export default function TaskDetailScreen() {
           if (!d) setRecurrence(undefined);
         }}
       />
-      <RecurrenceField value={recurrence} startDate={due?.date} onChange={setRecurrence} disabledHint="Сначала назначьте срок" />
-      <View style={styles.inlineRow}>
-        <Icon name="timer" size={17} color={COLORS.muted} />
-        <Text style={styles.inlineLabel}>Длительность</Text>
-        <TextInput
-          style={styles.inlineInput}
-          placeholder="— мин"
-          value={duration}
-          onChangeText={setDuration}
-          keyboardType="number-pad"
-          maxLength={4}
-          accessibilityLabel="Длительность в минутах"
-        />
-        {duration ? <Text style={styles.inlineSuffix}>мин</Text> : null}
-      </View>
 
-      <FieldLabel>Напоминания</FieldLabel>
-      <RemindersField value={reminders} onChange={setReminders} hasAnchor={!!due} />
-
-      <FieldLabel>Приоритет</FieldLabel>
-      <PriorityPicker value={priority} onChange={setPriority} />
+      <FieldLabel>Окно намаза {due ? `(${dayjs(due.date).format('D MMM')})` : '(сегодня)'}</FieldLabel>
+      {windowByTime ? (
+        // Время указано — окно подставляется по нему автоматически.
+        <View style={styles.inlineRow}>
+          <Icon name="moon" size={17} color={COLORS.warning} />
+          <Text style={styles.windowAuto}>{NAMAZ_WINDOW_TITLES[windowByTime]}</Text>
+          <Text style={styles.inlineSuffix}>по времени {due?.time}</Text>
+        </View>
+      ) : (
+        <NamazWindowPicker value={namazWindow} onChange={setNamazWindow} windows={windowsForDue} />
+      )}
 
       <FieldLabel>Проект</FieldLabel>
       <ChipsRow>
@@ -236,7 +223,7 @@ export default function TaskDetailScreen() {
         ))}
       </ChipsRow>
 
-      {projectId && availableSections.length > 0 ? (
+      {advanced && projectId && availableSections.length > 0 ? (
         <>
           <FieldLabel>Раздел</FieldLabel>
           <ChipsRow>
@@ -248,29 +235,98 @@ export default function TaskDetailScreen() {
         </>
       ) : null}
 
-      <FieldLabel>Сфера жизни</FieldLabel>
-      <SpherePicker value={sphere} onChange={setSphere} />
+      <FieldLabel>Напоминания</FieldLabel>
+      <RemindersField value={reminders} onChange={setReminders} hasAnchor={!!due} />
 
-      <FieldLabel>Тег намерения</FieldLabel>
-      <IntentionTagPicker value={intentionTag} onChange={setIntentionTag} />
+      {/* «Ещё» — в простом режиме свёрнуто, в расширенном всегда открыто. */}
+      {!advanced ? (
+        <Pressable
+          style={styles.moreButton}
+          onPress={() => setMoreOpen((v) => !v)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: showMore }}
+        >
+          <Icon name={showMore ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.muted} />
+          <Text style={styles.moreText}>{showMore ? 'Скрыть' : 'Ещё'}</Text>
+          {!showMore && filledMore.length > 0 ? (
+            <Text style={styles.moreHint} numberOfLines={1}>
+              · {filledMore.join(', ')}
+            </Text>
+          ) : null}
+        </Pressable>
+      ) : null}
 
-      <FieldLabel>Теги</FieldLabel>
-      <TagsField value={tagIds} onChange={setTagIds} />
+      {showMore ? (
+        <>
+          <FieldLabel>Описание</FieldLabel>
+          <MarkdownEditor value={description} onChange={setDescription} />
 
-      <FieldLabel>Окно намаза {due ? `(${dayjs(due.date).format('D MMM')})` : '(сегодня)'}</FieldLabel>
-      <NamazWindowPicker value={namazWindow} onChange={setNamazWindow} windows={windowsForDue} />
+          {existing && existing.status === 'active' ? (
+            <Pressable
+              style={styles.startRow}
+              onPress={() => startTask(existing.id)}
+              accessibilityRole="button"
+              accessibilityHint="Отметить время начала работы над задачей"
+            >
+              <Text style={styles.startIcon}>{existing.startedAt ? '⏳' : '▶'}</Text>
+              <Text style={styles.startText}>
+                {existing.startedAt
+                  ? `Начато ${dayjs(existing.startedAt).format('D MMM, HH:mm')} · нажмите, чтобы начать заново`
+                  : 'Начать — отметить время начала'}
+              </Text>
+            </Pressable>
+          ) : null}
 
-      <FieldLabel>Ценность — ради чего выполняется</FieldLabel>
-      <TextInput style={styles.input} placeholder="Ради чего эта задача?" value={value} onChangeText={setValue} multiline />
+          <FieldLabel>Чек-лист</FieldLabel>
+          <ChecklistEditor value={checklist} onChange={setChecklist} />
 
-      <FieldLabel>Ожидаемый результат</FieldLabel>
-      <TextInput
-        style={styles.input}
-        placeholder="Что получится в итоге?"
-        value={expectedResult}
-        onChangeText={setExpectedResult}
-        multiline
-      />
+          <FieldLabel>Повтор</FieldLabel>
+          <RecurrenceField value={recurrence} startDate={due?.date} onChange={setRecurrence} disabledHint="Сначала назначьте срок" />
+
+          <FieldLabel>Приоритет</FieldLabel>
+          <PriorityPicker value={priority} onChange={setPriority} />
+
+          <FieldLabel>Теги</FieldLabel>
+          <TagsField value={tagIds} onChange={setTagIds} />
+
+          <View style={styles.inlineRow}>
+            <Icon name="timer" size={17} color={COLORS.muted} />
+            <Text style={styles.inlineLabel}>Длительность</Text>
+            <TextInput
+              style={styles.inlineInput}
+              placeholder="— мин"
+              value={duration}
+              onChangeText={setDuration}
+              keyboardType="number-pad"
+              maxLength={4}
+              accessibilityLabel="Длительность в минутах"
+            />
+            {duration ? <Text style={styles.inlineSuffix}>мин</Text> : null}
+          </View>
+        </>
+      ) : null}
+
+      {advanced ? (
+        <>
+          <FieldLabel>Сфера жизни</FieldLabel>
+          <SpherePicker value={sphere} onChange={setSphere} />
+
+          <FieldLabel>Тег намерения</FieldLabel>
+          <IntentionTagPicker value={intentionTag} onChange={setIntentionTag} />
+
+          <FieldLabel>Ценность — ради чего выполняется</FieldLabel>
+          <TextInput style={styles.input} placeholder="Ради чего эта задача?" value={value} onChangeText={setValue} multiline />
+
+          <FieldLabel>Ожидаемый результат</FieldLabel>
+          <TextInput
+            style={styles.input}
+            placeholder="Что получится в итоге?"
+            value={expectedResult}
+            onChangeText={setExpectedResult}
+            multiline
+          />
+        </>
+      ) : null}
 
       {postponed || existing?.postponeReason ? (
         <>
@@ -354,6 +410,10 @@ const styles = StyleSheet.create({
     padding: 12,
     color: COLORS.text,
   },
+  windowAuto: { fontSize: 15, color: COLORS.warning, fontWeight: '500' },
+  moreButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, marginTop: 10 },
+  moreText: { fontSize: 15, fontWeight: '600', color: COLORS.text },
+  moreHint: { flex: 1, fontSize: 13, color: COLORS.tertiary },
   inlineRow: {
     flexDirection: 'row',
     alignItems: 'center',

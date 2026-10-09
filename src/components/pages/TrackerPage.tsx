@@ -5,9 +5,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Animated, Easing, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Text } from '../../components/themed';
-import { Tabs, router } from 'expo-router';
-import { Icon } from '../../components/Icon';
+import { Text } from '../themed';
+import { router } from 'expo-router';
+import { Icon } from '../Icon';
 import dayjs from 'dayjs';
 
 import { useAppData } from '../../lib/AppDataContext';
@@ -15,14 +15,14 @@ import type { Habit } from '../../lib/types';
 import { bestStreak, countOn, currentStreak, dayProgress, isScheduled, logIndex } from '../../lib/habits';
 import { DATE_FORMAT, WEEKDAY_SHORT, startOfIsoWeek, todayKey } from '../../lib/dates';
 import { useNow } from '../../lib/hooks';
-import { Fab } from '../../components/Fab';
-import { HabitIcon } from '../../components/HabitIcon';
-import { SwipePager } from '../../components/SwipePager';
-import { COLORS } from '../../components/ui';
+import { Fab } from '../Fab';
+import { HabitIcon } from '../HabitIcon';
+import { SwipePager } from '../SwipePager';
+import { COLORS } from '../ui';
 import { readableOn, withAlpha } from '../../theme/colors';
 
 
-export default function TrackerScreen() {
+export function TrackerPage() {
   const { habits, habitLogs, setHabitCount } = useAppData();
   useNow(60_000); // обновление в полночь
   const today = todayKey();
@@ -41,21 +41,6 @@ export default function TrackerScreen() {
 
   return (
     <View style={styles.container}>
-      <Tabs.Screen
-        options={{
-          headerRight: () => (
-            <Pressable
-              onPress={() => router.push('/habit/stats')}
-              hitSlop={10}
-              style={{ paddingHorizontal: 16 }}
-              accessibilityRole="button"
-              accessibilityLabel="Статистика привычек"
-            >
-              <Icon name="stats" size={22} color={COLORS.muted} />
-            </Pressable>
-          ),
-        }}
-      />
       <ScrollView style={styles.screen} contentContainerStyle={{ paddingBottom: 96 }}>
         <View style={styles.weekCard}>
           <View style={styles.weekNav}>
@@ -118,9 +103,19 @@ export default function TrackerScreen() {
           ) : null}
         </View>
 
-        <Text style={styles.sectionTitle}>
-          {selected === today ? 'Сегодня' : dayjs(selected).format('dddd, D MMMM')}
-        </Text>
+        <View style={styles.sectionRow}>
+          <Text style={styles.sectionTitle}>
+            {selected === today ? 'Сегодня' : dayjs(selected).format('dddd, D MMMM')}
+          </Text>
+          <Pressable
+            onPress={() => router.push('/habit/stats')}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Статистика привычек"
+          >
+            <Icon name="stats" size={22} color={COLORS.muted} />
+          </Pressable>
+        </View>
 
         {active.length === 0 ? (
           <View style={styles.empty}>
@@ -273,7 +268,8 @@ const styles = StyleSheet.create({
   circleSelected: { borderWidth: 2, borderColor: COLORS.text },
   circleNum: { fontSize: 13, fontWeight: '600', color: COLORS.text },
   backToday: { textAlign: 'center', color: COLORS.primary, fontSize: 13, marginTop: 10 },
-  sectionTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text, marginTop: 18, marginBottom: 8, textTransform: 'capitalize' },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18, marginBottom: 8 },
+  sectionTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text, textTransform: 'capitalize' },
   subTitle: { fontSize: 13, fontWeight: '500', color: COLORS.tertiary, marginTop: 16, marginBottom: 6 },
   hint: { fontSize: 13, color: COLORS.muted, paddingVertical: 6 },
   empty: { backgroundColor: COLORS.card, borderRadius: 8, padding: 16, gap: 6 },

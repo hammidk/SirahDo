@@ -20,14 +20,15 @@ import type { IconName } from './Icon';
 import dayjs from 'dayjs';
 
 import type { CompletionResult, CompleteTaskExtra } from '../lib/AppDataContext';
-import { useAppData } from '../lib/AppDataContext';
+import { useAdvancedMode, useAppData } from '../lib/AppDataContext';
 import type { NamazWindowName, Priority, Reminder, SphereId, Task, TaskDue } from '../lib/types';
 import { DEFAULT_PRIORITY, NAMAZ_WINDOW_TITLES, PRIORITIES, SPHERES } from '../lib/types';
-import { formatDue, isOverdue } from '../lib/dates';
+import { formatDue, isOverdue, todayKey } from '../lib/dates';
+import { namazWindowAt, namazWindowsForDate } from '../lib/prayerTimes';
 import { DueSheet } from './DueField';
 import { RemindersField } from './RemindersField';
 import { TagsField } from './TagsField';
-import { PriorityPicker, SpherePicker } from './pickers';
+import { NamazWindowPicker, PriorityPicker, SpherePicker } from './pickers';
 import { TimeField } from './TimeField';
 import { Button, COLORS, Chip, ChipsRow, Sheet } from './ui';
 
@@ -156,10 +157,14 @@ export function TaskSheetProvider({ children }: { children: ReactNode }) {
 
 // ---------- Компактный вид задачи ----------
 
-type Panel = 'reminders' | 'priority' | 'tags' | 'project' | 'sphere' | null;
+type Panel = 'reminders' | 'priority' | 'tags' | 'project' | 'sphere' | 'window' | null;
 
 function QuickTaskSheet({ taskId, initial, onClose }: { taskId?: string; initial: TaskDraft; onClose: () => void }) {
-  const { projects, sections, tags, addOrUpdateTask } = useAppData();
+  const { projects, sections, tags, settings, addOrUpdateTask } = useAppData();
+  // Простой режим: основное видно сразу, остальное — под «Ещё» (docs/spec/modes.md).
+  const advanced = useAdvancedMode();
+  const [more, setMore] = useState(false);
+  const showMore = advanced || more;
   const [draft, setDraft] = useState<TaskDraft>(initial);
   const [panel, setPanel] = useState<Panel>(null);
   const [dueOpen, setDueOpen] = useState(false);
@@ -210,6 +215,9 @@ function QuickTaskSheet({ taskId, initial, onClose }: { taskId?: string; initial
   const sphere = SPHERES.find((s) => s.id === draft.sphere);
   const tagNames = draft.tagIds.map((id) => tags.find((t) => t.id === id)?.name).filter(Boolean);
   const projectSections = sections.filter((s) => s.projectId === draft.projectId).sort((a, b) => a.order - b.order);
+  // Время указано — окно намаза подставляется по нему; без времени — выбирается вручную.
+  const windowByTime = draft.due?.time ? namazWindowAt(draft.due.date, draft.due.time, settings) : undefined;
+  const shownWindow = windowByTime ?? draft.namazWindow;
 
   return (
     <Sheet
@@ -248,16 +256,18 @@ function QuickTaskSheet({ taskId, initial, onClose }: { taskId?: string; initial
         onSubmitEditing={onSave}
         accessibilityLabel="Название задачи"
       />
-      <TextInput
-        style={styles.descriptionInput}
-        plain
-        placeholder="Описание"
-        value={draft.description ?? ''}
-        onChangeText={(t) => set('description', t)}
-        multiline
-        numberOfLines={3}
-        accessibilityLabel="Описание"
-      />
+      {showMore ? (
+        <TextInput
+          style={styles.descriptionInput}
+          plain
+          placeholder="Описание"
+          value={draft.description ?? ''}
+          onChangeText={(t) => set('description', t)}
+          multiline
+          numberOfLines={3}
+          accessibilityLabel="Описание"
+        />
+      ) : null}
 
       <View style={styles.chips}>
         <QuickChip
@@ -268,53 +278,71 @@ function QuickTaskSheet({ taskId, initial, onClose }: { taskId?: string; initial
           onPress={() => setDueOpen(true)}
         />
         <QuickChip
+          icon="moon"
+          label={shownWindow ? NAMAZ_WINDOW_TITLES[shownWindow] : 'Окно намаза'}
+          active={!!shownWindow}
+          color={shownWindow ? COLORS.warning : undefined}
+          selected={panel === 'window'}
+          // Окно по времени меняется вместе со временем — тап открывает срок.
+          onPress={() => (windowByTime ? setDueOpen(true) : togglePanel('window'))}
+        />
+        <QuickChip
+          icon={project ? 'folder' : 'inbox'}
+          label={project ? `${project.title}${advanced && section ? ` / ${section.title}` : ''}` : 'Входящие'}
+          active={!!project}
+          selected={panel === 'project'}
+          onPress={() => togglePanel('project')}
+        />
+        <QuickChip
           icon="bell"
           label={draft.reminders.length > 0 ? `${draft.reminders.length}` : 'Напоминание'}
           active={draft.reminders.length > 0}
           selected={panel === 'reminders'}
           onPress={() => togglePanel('reminders')}
         />
-        <QuickChip
-          icon="flag"
-          label={priority.title}
-          active={draft.priority !== 4}
-          color={draft.priority !== 4 ? priority.color : undefined}
-          selected={panel === 'priority'}
-          onPress={() => togglePanel('priority')}
-        />
-        <QuickChip
-          icon="tag"
-          label={tagNames.length > 0 ? tagNames.map((n) => `#${n}`).join(' ') : 'Теги'}
-          active={tagNames.length > 0}
-          selected={panel === 'tags'}
-          onPress={() => togglePanel('tags')}
-        />
-        <QuickChip
-          icon={project ? 'folder' : 'inbox'}
-          label={project ? `${project.title}${section ? ` / ${section.title}` : ''}` : 'Входящие'}
-          active={!!project}
-          selected={panel === 'project'}
-          onPress={() => togglePanel('project')}
-        />
-        <QuickChip
-          icon="circle"
-          label={sphere ? sphere.title : 'Сфера'}
-          active={!!sphere}
-          selected={panel === 'sphere'}
-          onPress={() => togglePanel('sphere')}
-        />
-        {draft.namazWindow ? (
-          // Окно намаза задаётся «+» у секции окна; здесь его можно только снять (полный выбор — в «⤢»).
+        {showMore ? (
+          <>
+            <QuickChip
+              icon="flag"
+              label={priority.title}
+              active={draft.priority !== 4}
+              color={draft.priority !== 4 ? priority.color : undefined}
+              selected={panel === 'priority'}
+              onPress={() => togglePanel('priority')}
+            />
+            <QuickChip
+              icon="tag"
+              label={tagNames.length > 0 ? tagNames.map((n) => `#${n}`).join(' ') : 'Теги'}
+              active={tagNames.length > 0}
+              selected={panel === 'tags'}
+              onPress={() => togglePanel('tags')}
+            />
+          </>
+        ) : null}
+        {advanced ? (
           <QuickChip
-            icon="close-circle"
-            label={NAMAZ_WINDOW_TITLES[draft.namazWindow]}
-            active
-            color={COLORS.warning}
-            onPress={() => set('namazWindow', undefined)}
+            icon="circle"
+            label={sphere ? sphere.title : 'Сфера'}
+            active={!!sphere}
+            selected={panel === 'sphere'}
+            onPress={() => togglePanel('sphere')}
           />
         ) : null}
+        {!showMore ? <QuickChip icon="more" label="Ещё" onPress={() => setMore(true)} /> : null}
       </View>
 
+      {panel === 'window' ? (
+        <View style={styles.panel}>
+          <NamazWindowPicker
+            value={draft.namazWindow}
+            onChange={(w) => {
+              set('namazWindow', w);
+              setPanel(null);
+            }}
+            windows={namazWindowsForDate(draft.due?.date ?? todayKey(), settings)}
+          />
+        </View>
+      ) : null}
       {panel === 'reminders' ? (
         <View style={styles.panel}>
           <RemindersField value={draft.reminders} onChange={(r) => set('reminders', r)} hasAnchor={!!draft.due} />
@@ -355,7 +383,7 @@ function QuickTaskSheet({ taskId, initial, onClose }: { taskId?: string; initial
                 />
               ))}
           </ChipsRow>
-          {draft.projectId && projectSections.length > 0 ? (
+          {advanced && draft.projectId && projectSections.length > 0 ? (
             <View style={{ marginTop: 10 }}>
               <ChipsRow>
                 <Chip label="Без раздела" active={!draft.sectionId} onPress={() => set('sectionId', undefined)} />

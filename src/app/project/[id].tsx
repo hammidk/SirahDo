@@ -1,6 +1,7 @@
-// Карточка проекта (docs/spec/overview.md): «Намерение → Действие → Упование».
-// Действие — задачи проекта по разделам (как в Todoist), подпроекты-папки.
-// Управление: переименовать, избранное, папка/сфера/тег намерения, архив, удаление.
+// Карточка проекта (docs/spec/overview.md). Простой режим: название + список задач.
+// Расширенный (docs/spec/modes.md): «Намерение → Действие → Упование» — разделы
+// (как в Todoist) со своим Намерением, подпроекты, сфера и тег намерения.
+// Управление: переименовать, избранное, папка, архив, удаление.
 
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -9,7 +10,7 @@ import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Icon } from '../../components/Icon';
 import type { IconName } from '../../components/Icon';
 
-import { useAppData } from '../../lib/AppDataContext';
+import { useAdvancedMode, useAppData } from '../../lib/AppDataContext';
 import type { Section } from '../../lib/types';
 import { INTENTION_TAGS, SPHERES } from '../../lib/types';
 import {
@@ -49,6 +50,7 @@ export default function ProjectDetailScreen() {
     removeSection,
   } = useAppData();
   const { openTask } = useTaskSheet();
+  const advanced = useAdvancedMode();
   const [dialog, setDialog] = useState<Dialog>(null);
   const [showDone, setShowDone] = useState(false);
 
@@ -175,18 +177,24 @@ export default function ProjectDetailScreen() {
         <Pressable onPress={() => setDialog({ kind: 'rename' })} accessibilityRole="button" accessibilityHint="Переименовать">
           <Text style={styles.title}>{project.title}</Text>
         </Pressable>
-        {sphere || intentionTag ? (
+        {advanced && (sphere || intentionTag) ? (
           <Text style={styles.meta}>{[sphere?.title, intentionTag?.title].filter(Boolean).join(' · ')}</Text>
         ) : null}
 
-        <Text style={styles.blockLabel}>Намерение</Text>
-        <IntentionBlock
-          value={project.intention}
-          placeholder="Зачем этот проект? Ради чего он делается?"
-          onSave={(text) => addOrUpdateProject({ id: project.id, intention: text })}
-        />
+        {/* Простой режим — только название и задачи. Данные разделов, Намерения и т.п.
+            не удаляются, просто не показываются. */}
+        {advanced ? (
+          <>
+            <Text style={styles.blockLabel}>Намерение</Text>
+            <IntentionBlock
+              value={project.intention}
+              placeholder="Зачем этот проект? Ради чего он делается?"
+              onSave={(text) => addOrUpdateProject({ id: project.id, intention: text })}
+            />
+          </>
+        ) : null}
 
-        {subprojects.length > 0 || depth < MAX_PROJECT_DEPTH - 1 ? (
+        {advanced && (subprojects.length > 0 || depth < MAX_PROJECT_DEPTH - 1) ? (
           <>
             <View style={styles.actionHeader}>
               <Text style={styles.blockLabel}>Подпроекты</Text>
@@ -207,22 +215,26 @@ export default function ProjectDetailScreen() {
         ) : null}
 
         <View style={styles.actionHeader}>
-          <Text style={styles.blockLabel}>Действие</Text>
+          <Text style={styles.blockLabel}>{advanced ? 'Действие' : 'Задачи'}</Text>
           <Pressable onPress={() => openTask({ defaults: { projectId: project.id } })} hitSlop={8} accessibilityRole="button">
             <Text style={styles.addLink}>+ Задача</Text>
           </Pressable>
         </View>
 
-        {active.filter((t) => !t.sectionId).map((t) => (
+        {/* В простом режиме разделов нет: задачи из разделов идут общим списком. */}
+        {(advanced ? active.filter((t) => !t.sectionId) : active).map((t) => (
           <TaskCard key={t.id} task={t} />
         ))}
-        {active.length === 0 && projectSections.length === 0 ? <Text style={styles.hint}>В проекте пока нет задач.</Text> : null}
+        {active.length === 0 && (!advanced || projectSections.length === 0) ? <Text style={styles.hint}>В проекте пока нет задач.</Text> : null}
 
-        {projectSections.map(renderSection)}
-
-        <Pressable style={styles.addSectionButton} onPress={() => setDialog({ kind: 'newSection' })} accessibilityRole="button">
-          <Text style={styles.addLink}>+ Раздел</Text>
-        </Pressable>
+        {advanced ? (
+          <>
+            {projectSections.map(renderSection)}
+            <Pressable style={styles.addSectionButton} onPress={() => setDialog({ kind: 'newSection' })} accessibilityRole="button">
+              <Text style={styles.addLink}>+ Раздел</Text>
+            </Pressable>
+          </>
+        ) : null}
 
         {done.length > 0 ? (
           <>
@@ -235,12 +247,16 @@ export default function ProjectDetailScreen() {
           </>
         ) : null}
 
-        <Text style={styles.blockLabel}>Упование</Text>
-        <View style={[styles.block, styles.upovanieBlock]}>
-          <Text style={styles.blockPlaceholder}>
-            Здесь появятся рекомендации ИИ по религиозной стороне проекта — дуа, дополнительный намаз, азкары. Пока заглушка.
-          </Text>
-        </View>
+        {advanced ? (
+          <>
+            <Text style={styles.blockLabel}>Упование</Text>
+            <View style={[styles.block, styles.upovanieBlock]}>
+              <Text style={styles.blockPlaceholder}>
+                Здесь появятся рекомендации ИИ по религиозной стороне проекта — дуа, дополнительный намаз, азкары. Пока заглушка.
+              </Text>
+            </View>
+          </>
+        ) : null}
       </ScrollView>
 
       <Fab accessibilityLabel="Новая задача в проекте" onPress={() => openTask({ defaults: { projectId: project.id } })} />
@@ -358,6 +374,7 @@ function ProjectSettingsSheet({
   onDelete: () => void;
 }) {
   const { projects, addOrUpdateProject } = useAppData();
+  const advanced = useAdvancedMode();
   const project = projects.find((p) => p.id === projectId)!;
   const blocked = descendantIds(projectId, projects);
   const height = subtreeHeight(projectId, projects);
@@ -386,11 +403,15 @@ function ProjectSettingsSheet({
         ))}
       </ChipsRow>
 
-      <FieldLabel>Сфера жизни</FieldLabel>
-      <SpherePicker value={project.sphere} onChange={(v) => addOrUpdateProject({ id: projectId, sphere: v })} />
+      {advanced ? (
+        <>
+          <FieldLabel>Сфера жизни</FieldLabel>
+          <SpherePicker value={project.sphere} onChange={(v) => addOrUpdateProject({ id: projectId, sphere: v })} />
 
-      <FieldLabel>Тег намерения</FieldLabel>
-      <IntentionTagPicker value={project.intentionTag} onChange={(v) => addOrUpdateProject({ id: projectId, intentionTag: v })} />
+          <FieldLabel>Тег намерения</FieldLabel>
+          <IntentionTagPicker value={project.intentionTag} onChange={(v) => addOrUpdateProject({ id: projectId, intentionTag: v })} />
+        </>
+      ) : null}
 
       <View style={styles.settingsActions}>
         <Button title="В архив" kind="secondary" onPress={onArchive} />
