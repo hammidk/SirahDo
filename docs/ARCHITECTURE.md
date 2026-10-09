@@ -2,6 +2,8 @@
 
 Как устроен код. Что делает продукт — [SPEC.md](SPEC.md); технологии — [TECH_STACK.md](TECH_STACK.md).
 
+> **Состояние на 09.10.2026.** Продукт упрощён (D33–D38 в [DECISIONS.md](DECISIONS.md)), код ещё нет: он реализует прежнюю концепцию на схеме данных v4. Разделы «Структура `src/`», «Слой данных», «Чистая логика» и «UI-система» описывают **фактический код**. Раздел «Модель данных» описывает **целевую модель v5**, «План миграции v4 → v5» — как к ней перейти. По мере упрощения кода разделы приводятся в соответствие, эта пометка удаляется.
+
 ## Структура `src/`
 
 ```
@@ -25,6 +27,8 @@ src/
   theme/                  colors.ts (токены), navigation.ts (опции шапок)
 ```
 
+**Уходит при упрощении кода** (ещё в репозитории): маршруты `tag/[id]`, `filter/[id]`, `filters-tags`, `diary/*`, `history/*` (вместо двух последних — один экран «Итог дня»); компоненты `IntentionBlock`, `TagsField`, блоки разделов и подпроектов в `project/[id]` и `ProjectSheets`; `lib/filters.ts`, дерево проектов в `lib/projects.ts`; хук `useAdvancedMode()` и все проверки режима; `ProjectsPage` становится страницей «Задачи». Появляется: лента окон на `TodayPage`, набор готовых привычек в `lib/habits.ts`.
+
 ## Слой данных
 
 **Поток:** экран → `useAppData()` (`lib/AppDataContext.tsx`) → `lib/storage.ts` (AsyncStorage). Экраны никогда не ходят в `storage.ts` напрямую — чтобы позже заменить хранилище (Firebase) только в `storage.ts`.
@@ -36,17 +40,58 @@ src/
 - **Расширенный режим:** проверка только через `useAdvancedMode()` из `AppDataContext` (компоненты не читают `settings.advancedMode` напрямую). Скрытие полей не трогает данные.
 - **Окно по времени:** `addOrUpdateTask` при сохранении срока со временем ставит `namazWindow = namazWindowAt(date, time)` (`lib/prayerTimes`).
 
-## Модель данных (`lib/types.ts`)
+## Модель данных (`lib/types.ts`) — целевая, схема v5
 
-- **Task:** title, description (markdown), checklist[], due {date YYYY-MM-DD, time? HH:mm}, durationMinutes, recurrence, reminders[], priority 1–4, tagIds[], intentionTag, projectId?/sectionId? (нет проекта = Входящие), sphere, namazWindow (имя окна), value, expectedResult, status active|done, createdAt, startedAt, endedAt, comment, postponeReason, postponedFrom[].
-- **Project:** title, parentProjectId, sphere, intentionTag, intention, favorite, order, archived. **Section:** projectId, title, intention, order.
-- **Tag:** name, color, favorite. Фильтры в данных не хранятся — 4 фиксированных по сроку (`FIXED_FILTERS` в `lib/filters.ts`).
-- **Calendar:** name, color, visible, order. **CalendarEvent:** title, allDay, start/end (ISO; для allDay end — начало последнего дня), recurrence, calendarId, colorOverride, reminders[], location, description, links[].
-- **Habit:** name, icon (id из `HABIT_ICONS` в `lib/habits.ts`), color (из `CATEGORY_COLORS`), description, targetCountPerDay, weekdays (ISO 1–7), reminders [{time}], archived, order, createdAt. **HabitLog:** id `${habitId}_${date}`, completedCount.
-- **DiaryEntry:** id = date, text, wentWell, changeTomorrow, gratitude.
-- **Recurrence:** freq day|week|month|year, interval, weekdays?, until?, count?. **Reminder:** {kind:'offset', minutes} | {kind:'at', at}.
-- **UserSettings:** userName, latitude, longitude, locationLabel, calculationMethod, madhab, hijriOffset, calendarView, showTasksInCalendar, advancedMode, onboardingDone. Новые поля настроек — со значением по умолчанию в `DEFAULT_SETTINGS`: сохранённые настройки сливаются с ним при чтении, миграция для них не нужна.
-- Справочники (`SPHERES`, `INTENTION_TAGS`, `PRIORITIES`, `NAMAZ_WINDOW_*`, `PRAYER_*`, `CALENDAR_COLORS`) — константы в `types.ts`.
+В коде сейчас v4: все поля из строк «наследие» ещё рабочие. Переход — «План миграции v4 → v5» ниже.
+
+**Правило v5 (D38): ничего не удаляется.** Поля и коллекции, которые больше не нужны продукту, остаются в хранилище как *наследие*: код их не показывает, не редактирует и не использует в логике, но и не стирает. В `types.ts` они остаются необязательными полями с пометкой «наследие v4».
+
+- **Task** — рабочие поля: title, description (markdown), checklist[], due {date YYYY-MM-DD, time? HH:mm}, recurrence, reminders[], projectId? (список; нет — Входящие), namazWindow? (имя окна), status active|done, createdAt, endedAt.
+  Наследие: durationMinutes, priority, tagIds, intentionTag, sectionId, sphere, value, expectedResult, startedAt, comment, postponeReason, postponedFrom.
+- **Project** (в интерфейсе — «Список»; имя сущности и ключ хранилища не меняются) — рабочие: title, favorite, order, archived.
+  Наследие: parentProjectId, sphere, intentionTag, intention. Служебное поле миграции: legacyTitle (название до v5).
+- **Section**, **Tag** — коллекции-наследие (`sirahdo:sections`, `sirahdo:tags`): приложение их не читает и не пишет.
+- **Calendar:** name, color, visible, order. **CalendarEvent:** title, allDay, start/end (ISO; для allDay end — начало последнего дня), recurrence, calendarId, colorOverride, reminders[], location, description, links[]. Без изменений.
+- **Habit:** name, icon (id из `HABIT_ICONS` в `lib/habits.ts`), color (из `CATEGORY_COLORS`), description, targetCountPerDay, weekdays (ISO 1–7), **namazWindow?** (нет — «в течение дня»), **presetId?** (id готовой привычки, из которой создана), reminders[], archived, order, createdAt. **HabitLog:** id `${habitId}_${date}`, completedCount.
+- **DiaryEntry** (заметка о дне) — рабочие: id = date, text. Наследие: wentWell, changeTomorrow, gratitude (экран «Итог дня» показывает их только для чтения).
+- **Recurrence:** freq day|week|month|year, interval, weekdays?, until?, count?.
+- **Reminder** (задача, событие): {kind:'offset', minutes} | {kind:'at', at} | **{kind:'prayer', prayer, offsetMinutes}** — от времени намаза на день срока; offsetMinutes < 0 — до, 0 — в момент, > 0 — после. У событий вид 'prayer' не используется.
+  **HabitReminder:** {time} | **{prayer, offsetMinutes}** — в дни привычки.
+- **UserSettings:** userName, latitude, longitude, locationLabel, calculationMethod, madhab, hijriOffset, calendarView, showTasksInCalendar, onboardingDone. Наследие: advancedMode. Новые поля настроек — со значением по умолчанию в `DEFAULT_SETTINGS`: сохранённые настройки сливаются с ним при чтении, миграция для них не нужна.
+- Справочники — константы в `types.ts`: `NAMAZ_WINDOW_*`, `PRAYER_*`, `CALENDAR_COLORS`; набор готовых привычек `HABIT_PRESETS` — в `lib/habits.ts` (значения — [spec/habits.md](spec/habits.md)). `SPHERES`, `INTENTION_TAGS`, `PRIORITIES` из кода убираются.
+
+## План миграции v4 → v5 (не реализована)
+
+Цель — перейти к простой модели, не потеряв ни одной записи. `SCHEMA_VERSION` = 5, функция `migrateV4toV5()`, идемпотентна, как и прежние.
+
+**Что миграция меняет** — только коллекцию проектов (D35):
+
+1. Копия: содержимое `sirahdo:projects` сохраняется как есть в `sirahdo:backup:v4:projects`. Если ключ уже существует — не перезаписывается.
+2. Плоские названия: у проекта с существующим родителем `title` становится путём «Родитель / Дочерний» (все уровни), исходное название пишется в `legacyTitle`; `parentProjectId` остаётся. Проект, у которого уже есть `legacyTitle`, пропускается — так повторный запуск ничего не меняет.
+3. Архив: если в архиве любой предок проекта — проект тоже получает `archived`. Иначе скрытое поддерево внезапно появится среди списков.
+4. Порядок: `order` перенумеровывается обходом дерева в глубину — списки идут так же, как были видны в дереве.
+
+**Что миграция не трогает** (данные целы, код их игнорирует):
+
+| Было | Что с данными | Что видит пользователь |
+|---|---|---|
+| Разделы | `sectionId` у задач и `sirahdo:sections` остаются | задачи раздела — в общем списке своего списка |
+| Теги, приоритет, длительность, сфера, тег намерения, Ценность, Ожидаемый результат | остаются в записях задач; `sirahdo:tags` остаётся | не показываются; порядок задач — по сроку |
+| Намерение, сфера, тег намерения проекта и раздела | остаются в записях | не показываются |
+| Время начала, итог-комментарий, причина и история переносов | остаются в записях задач | не показываются |
+| Дневник | `sirahdo:diary` остаётся; `text` — заметка о дне | «Итог дня»: заметка + прежние поля только для чтения |
+| Расширенный режим | `advancedMode` остаётся в настройках | переключателя нет |
+| Привычки | без изменений: нет `namazWindow` — «в течение дня»; напоминания `{time}` действуют | как раньше + можно выбрать окно |
+
+**Правила кода, без которых данные потеряются:**
+
+- `upsert` сливает `{...старое, ...новое}`. Формы передают в `addOrUpdate*` только поля, которые редактируют; ключей наследия во входе быть не должно — `undefined` в них сотрёт значение.
+- `removeProject` больше не каскадирует по `parentProjectId`: бывший подпроект — самостоятельный список. Удаляются только задачи с этим `projectId`.
+- Значения по умолчанию `priority` и `tagIds` при создании задачи больше не подставляются.
+- Откат не поддерживается: код до v5 нельзя запускать на данных v5 (в том числе старую ветку в Expo Go на том же телефоне) — он запишет версию схемы 4 и не ожидает задач без `priority`.
+- Сортировки, счётчики и поиск не используют наследие.
+
+**Проверка перед выпуском:** прогнать миграцию на копии реальных данных пользователя и на наборе с тремя уровнями вложенности, разделами, архивным родителем с активным подпроектом и одноимёнными подпроектами у разных родителей; сверить число задач, проектов, привычек, отметок и записей дневника до и после; запустить миграцию второй раз — данные не меняются.
 
 ## Уведомления (`lib/notifications.ts`)
 
@@ -54,6 +99,13 @@ src/
 - Задача: DATE-триггеры по её напоминаниям (только текущее вхождение). Событие: вхождения на 14 дней вперёд. Привычка: DAILY или WEEKLY-триггеры.
 - Лимит iOS 64: при полной пересборке — не больше 60, из них привычкам ≤ 30, остальное — ближайшие по времени. Полная пересборка при старте и при возврате в приложение раз в 6 часов; разрешение запрашивается только при первом реальном напоминании.
 - Все операции идут в одной очереди. На вебе — no-op. Тап по уведомлению задачи → `router.push(url)` из `data.url`.
+
+**Напоминания от времени намаза (v5, не реализовано).** Время считается через `lib/prayerTimes` на конкретную дату, поэтому повторяющиеся триггеры не подходят — только DATE.
+- Задача: DATE-триггер на день срока (как остальные её напоминания).
+- Привычка: DATE-триггеры на её дни в ближайшие 7 дней, идентификатор `habit:<id>:<n>:<date>`; напоминания «время суток» остаются DAILY/WEEKLY.
+- Пересборка — при старте, при возврате в приложение раз в 6 часов и при смене местоположения, метода расчёта или мазхаба. Если приложение не открывали больше 7 дней, напоминания привычек от намаза перестают приходить до следующего открытия.
+- Лимит iOS 64 остаётся общим: такие напоминания расходуют его быстрее (до 7 на одно напоминание привычки), распределение лимита пересматривается при реализации.
+- Без координат время намаза не считается — напоминание не ставится, форма его не предлагает.
 
 ## Чистая логика (`lib/`)
 
